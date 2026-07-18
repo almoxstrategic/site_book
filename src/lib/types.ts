@@ -32,11 +32,15 @@ export type ChecklistTemplate = {
 export type CardChecklistItem = {
   id: string;
   card_id: string;
-  template_id: string;
+  template_id: string | null;
+  category_id: string | null;
+  label: string | null;
+  sort_order: number;
   is_completed: boolean;
   checklist_templates?: ChecklistTemplate & {
     checklist_categories?: ChecklistCategory;
   };
+  checklist_categories?: ChecklistCategory;
 };
 
 export type Comment = {

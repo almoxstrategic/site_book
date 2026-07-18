@@ -28,16 +28,17 @@ import {
 } from "@/components/ui/dialog";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { KanbanColumn } from "@/components/kanban/kanban-column";
-import { CardDetailSheet } from "@/components/kanban/card-detail-sheet";
 import {
   useBoardData,
   useBoardMutations,
   useCardProgress,
 } from "@/hooks/use-board";
+import { useSelectedCard } from "@/hooks/use-selected-card";
 import type { Card } from "@/lib/types";
 
 export function KanbanBoard() {
-  const { columns, cards, checklist, isLoading, isError } = useBoardData();
+  const { columns, cards, checklist, commentCounts, isLoading, isError } =
+    useBoardData();
   const progress = useCardProgress(checklist);
   const {
     addColumn,
@@ -47,9 +48,9 @@ export function KanbanBoard() {
     removeCard,
     relocateCard,
   } = useBoardMutations();
+  const { openCard } = useSelectedCard();
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [newColumnOpen, setNewColumnOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [newCardOpen, setNewCardOpen] = useState<{
@@ -71,8 +72,6 @@ export function KanbanBoard() {
     }
     return map;
   }, [columns, cards]);
-
-  const selectedCard = cards.find((c) => c.id === selectedCardId) ?? null;
 
   function findContainer(id: string) {
     if (columns.some((c) => c.id === id)) return id;
@@ -209,7 +208,8 @@ export function KanbanBoard() {
                           card={card}
                           completed={p.completed}
                           total={p.total}
-                          onClick={() => setSelectedCardId(card.id)}
+                          commentCount={commentCounts[card.id] ?? 0}
+                          onClick={() => openCard(card.id)}
                           onDelete={() => {
                             if (
                               confirm(
@@ -242,16 +242,6 @@ export function KanbanBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
-
-      <CardDetailSheet
-        card={selectedCard}
-        columns={columns}
-        checklist={checklist.filter((i) => i.card_id === selectedCardId)}
-        open={!!selectedCardId}
-        onOpenChange={(open) => {
-          if (!open) setSelectedCardId(null);
-        }}
-      />
 
       <Dialog open={newColumnOpen} onOpenChange={setNewColumnOpen}>
         <DialogContent>

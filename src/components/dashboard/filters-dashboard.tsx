@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy, Filter } from "lucide-react";
+import { Copy, Filter, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,23 +17,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useBoardData, useBoardMutations } from "@/hooks/use-board";
+import { useSelectedCard } from "@/hooks/use-selected-card";
+import { checklistItemLabel } from "@/lib/checklist-defaults";
 import type { FilterStatus } from "@/lib/types";
 
 const ALL_SITES = "__all_sites__";
 const ALL_TASKS = "__all_tasks__";
+const DEFAULT_STATUS: FilterStatus | "all" = "pending";
 
 function statusLabel(isCompleted: boolean) {
-  return isCompleted ? "Marcado" : "Não marcado";
+  return isCompleted ? "Feito" : "Pendente";
 }
 
 export function FiltersDashboard() {
   const { cards, checklist, templates, isLoading, isError } = useBoardData();
   const { setChecklist } = useBoardMutations();
+  const { openCard } = useSelectedCard();
 
   const [siteQuery, setSiteQuery] = useState("");
   const [siteId, setSiteId] = useState<string>(ALL_SITES);
   const [templateId, setTemplateId] = useState<string>(ALL_TASKS);
-  const [status, setStatus] = useState<FilterStatus | "all">("pending");
+  const [status, setStatus] = useState<FilterStatus | "all">(DEFAULT_STATUS);
 
   const sortedCards = useMemo(
     () =>
@@ -88,8 +92,8 @@ export function FiltersDashboard() {
         const nameB = titleById.get(b.card_id) ?? b.card_id;
         const bySite = nameA.localeCompare(nameB);
         if (bySite !== 0) return bySite;
-        const labelA = a.checklist_templates?.label ?? "";
-        const labelB = b.checklist_templates?.label ?? "";
+        const labelA = checklistItemLabel(a);
+        const labelB = checklistItemLabel(b);
         return labelA.localeCompare(labelB);
       });
   }, [checklist, siteId, siteQuery, templateId, status, titleById]);
@@ -98,6 +102,19 @@ export function FiltersDashboard() {
     templateId === ALL_TASKS
       ? null
       : (templates.find((t) => t.id === templateId)?.label ?? null);
+
+  const hasActiveFilters =
+    siteQuery.trim() !== "" ||
+    siteId !== ALL_SITES ||
+    templateId !== ALL_TASKS ||
+    status !== DEFAULT_STATUS;
+
+  function clearFilters() {
+    setSiteQuery("");
+    setSiteId(ALL_SITES);
+    setTemplateId(ALL_TASKS);
+    setStatus(DEFAULT_STATUS);
+  }
 
   async function copySites() {
     if (rows.length === 0) {
@@ -108,8 +125,7 @@ export function FiltersDashboard() {
     const text = rows
       .map((r) => {
         const site = titleById.get(r.card_id) ?? r.card_id;
-        const task =
-          r.checklist_templates?.label ?? selectedTaskLabel ?? "Tarefa";
+        const task = checklistItemLabel(r) || selectedTaskLabel || "Tarefa";
         return `${site} - ${task} - ${statusLabel(r.is_completed)}`;
       })
       .join("\n");
@@ -214,21 +230,31 @@ export function FiltersDashboard() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pending">Não marcados</SelectItem>
-                <SelectItem value="completed">Marcados</SelectItem>
+                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="completed">Feito</SelectItem>
                 <SelectItem value="all">Todos</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <Button
-            variant="secondary"
-            onClick={copySites}
-            disabled={rows.length === 0}
-            className="w-full xl:w-auto"
-          >
-            <Copy /> Copiar Sites
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
+            <Button
+              variant="outline"
+              onClick={clearFilters}
+              disabled={!hasActiveFilters}
+              className="w-full xl:w-auto"
+            >
+              <RotateCcw /> Limpar Filtros
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={copySites}
+              disabled={rows.length === 0}
+              className="w-full xl:w-auto"
+            >
+              <Copy /> Copiar Sites
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -265,15 +291,20 @@ export function FiltersDashboard() {
               )}
               {rows.map((row) => {
                 const siteName = titleById.get(row.card_id) ?? row.card_id;
-                const taskLabel =
-                  row.checklist_templates?.label ?? selectedTaskLabel ?? "—";
+                const taskLabel = checklistItemLabel(row) || selectedTaskLabel || "—";
                 return (
                   <tr
                     key={row.id}
                     className="border-t border-slate-100 transition hover:bg-slate-50/80"
                   >
                     <td className="px-4 py-3 font-mono font-medium text-slate-900">
-                      {siteName}
+                      <button
+                        type="button"
+                        onClick={() => openCard(row.card_id)}
+                        className="text-left underline-offset-2 transition hover:text-teal-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 focus-visible:ring-offset-2 rounded-sm"
+                      >
+                        {siteName}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{taskLabel}</td>
                     <td className="px-4 py-3">

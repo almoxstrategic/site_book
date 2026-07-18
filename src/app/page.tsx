@@ -4,6 +4,7 @@ import { BookOpen, Columns3, LayoutDashboard } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { FiltersDashboard } from "@/components/dashboard/filters-dashboard";
+import { SelectedCardProvider } from "@/hooks/use-selected-card";
 
 export default function Home() {
   return (
@@ -28,26 +29,28 @@ export default function Home() {
         </div>
       </header>
 
-      <Tabs defaultValue="kanban" className="animate-fade-up-delay flex-1">
-        <TabsList>
-          <TabsTrigger value="kanban" className="gap-2">
-            <Columns3 className="h-4 w-4" />
-            Kanban
-          </TabsTrigger>
-          <TabsTrigger value="dashboard" className="gap-2">
-            <LayoutDashboard className="h-4 w-4" />
-            Relatórios
-          </TabsTrigger>
-        </TabsList>
+      <SelectedCardProvider>
+        <Tabs defaultValue="kanban" className="animate-fade-up-delay flex-1">
+          <TabsList>
+            <TabsTrigger value="kanban" className="gap-2">
+              <Columns3 className="h-4 w-4" />
+              Kanban
+            </TabsTrigger>
+            <TabsTrigger value="dashboard" className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              Relatórios
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="kanban" className="outline-none">
-          <KanbanBoard />
-        </TabsContent>
+          <TabsContent value="kanban" className="outline-none">
+            <KanbanBoard />
+          </TabsContent>
 
-        <TabsContent value="dashboard" className="outline-none">
-          <FiltersDashboard />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="dashboard" className="outline-none">
+            <FiltersDashboard />
+          </TabsContent>
+        </Tabs>
+      </SelectedCardProvider>
     </div>
   );
 }

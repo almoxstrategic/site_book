@@ -4,20 +4,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import {
+  addChecklistItem,
   createCard,
   createColumn,
   createComment,
   deleteCard,
+  deleteChecklistItem,
   deleteColumn,
   deleteComment,
   fetchCards,
   fetchChecklistItems,
   fetchColumns,
+  fetchCommentCounts,
   fetchComments,
   fetchTemplates,
   moveCard,
+  seedDefaultChecklists,
   toggleChecklistItem,
   updateCard,
+  updateChecklistItemLabel,
   updateColumn,
   updateComment,
 } from "@/lib/api";
@@ -29,31 +34,13 @@ export const queryKeys = {
   cards: ["cards"] as const,
   checklist: ["checklist"] as const,
   templates: ["templates"] as const,
+  commentCounts: ["commentCounts"] as const,
   comments: (cardId: string) => ["comments", cardId] as const,
 };
 
-export function useBoardData() {
+/** Subscribe once at the app shell — do not call from every consumer of useBoardData. */
+export function useBoardRealtime() {
   const qc = useQueryClient();
-
-  const columnsQuery = useQuery({
-    queryKey: queryKeys.columns,
-    queryFn: fetchColumns,
-  });
-
-  const cardsQuery = useQuery({
-    queryKey: queryKeys.cards,
-    queryFn: fetchCards,
-  });
-
-  const checklistQuery = useQuery({
-    queryKey: queryKeys.checklist,
-    queryFn: fetchChecklistItems,
-  });
-
-  const templatesQuery = useQuery({
-    queryKey: queryKeys.templates,
-    queryFn: fetchTemplates,
-  });
 
   useEffect(() => {
     const channel = supabase
@@ -89,6 +76,7 @@ export function useBoardData() {
           if (cardId) {
             qc.invalidateQueries({ queryKey: queryKeys.comments(cardId) });
           }
+          qc.invalidateQueries({ queryKey: queryKeys.commentCounts });
         }
       )
       .subscribe();
@@ -97,12 +85,40 @@ export function useBoardData() {
       supabase.removeChannel(channel);
     };
   }, [qc]);
+}
+
+export function useBoardData() {
+  const columnsQuery = useQuery({
+    queryKey: queryKeys.columns,
+    queryFn: fetchColumns,
+  });
+
+  const cardsQuery = useQuery({
+    queryKey: queryKeys.cards,
+    queryFn: fetchCards,
+  });
+
+  const checklistQuery = useQuery({
+    queryKey: queryKeys.checklist,
+    queryFn: fetchChecklistItems,
+  });
+
+  const templatesQuery = useQuery({
+    queryKey: queryKeys.templates,
+    queryFn: fetchTemplates,
+  });
+
+  const commentCountsQuery = useQuery({
+    queryKey: queryKeys.commentCounts,
+    queryFn: fetchCommentCounts,
+  });
 
   return {
     columns: columnsQuery.data ?? [],
     cards: cardsQuery.data ?? [],
     checklist: checklistQuery.data ?? [],
     templates: templatesQuery.data ?? [],
+    commentCounts: commentCountsQuery.data ?? {},
     isLoading:
       columnsQuery.isLoading ||
       cardsQuery.isLoading ||
@@ -283,6 +299,76 @@ export function useBoardMutations() {
     },
   });
 
+  const renameChecklistItem = useMutation({
+    mutationFn: ({ itemId, label }: { itemId: string; label: string }) =>
+      updateChecklistItemLabel(itemId, label),
+    onMutate: async ({ itemId, label }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.checklist });
+      const previous = qc.getQueryData(queryKeys.checklist);
+      qc.setQueryData(
+        queryKeys.checklist,
+        (old: CardChecklistItem[] | undefined) =>
+          old?.map((i) =>
+            i.id === itemId ? { ...i, label: label.trim() || null } : i
+          )
+      );
+      return { previous };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(queryKeys.checklist, ctx.previous);
+      toast.error(e.message || "Erro ao renomear item");
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+    },
+  });
+
+  const createChecklistItem = useMutation({
+    mutationFn: addChecklistItem,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+      toast.success("Item adicionado");
+    },
+    onError: (e: Error) => toast.error(e.message || "Erro ao adicionar item"),
+  });
+
+  const removeChecklistItem = useMutation({
+    mutationFn: deleteChecklistItem,
+    onMutate: async (itemId) => {
+      await qc.cancelQueries({ queryKey: queryKeys.checklist });
+      const previous = qc.getQueryData(queryKeys.checklist);
+      qc.setQueryData(
+        queryKeys.checklist,
+        (old: CardChecklistItem[] | undefined) =>
+          old?.filter((i) => i.id !== itemId)
+      );
+      return { previous };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(queryKeys.checklist, ctx.previous);
+      toast.error(e.message || "Erro ao excluir item");
+    },
+    onSuccess: () => toast.success("Item excluído"),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+    },
+  });
+
+  const applyDefaultChecklists = useMutation({
+    mutationFn: (cardId: string) => seedDefaultChecklists(cardId),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+      qc.invalidateQueries({ queryKey: queryKeys.templates });
+      if (result.added === 0) {
+        toast.message("Checklists padrão já estão neste card");
+      } else {
+        toast.success(`${result.added} item(ns) padrão adicionados`);
+      }
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Erro ao adicionar checklists padrão"),
+  });
+
   return {
     addColumn,
     renameColumn,
@@ -292,6 +378,10 @@ export function useBoardMutations() {
     editCard,
     relocateCard,
     setChecklist,
+    renameChecklistItem,
+    createChecklistItem,
+    removeChecklistItem,
+    applyDefaultChecklists,
   };
 }
 
@@ -314,6 +404,7 @@ export function useComments(cardId: string | null) {
     }) => createComment(cardId!, author, content),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.comments(cardId!) });
+      qc.invalidateQueries({ queryKey: queryKeys.commentCounts });
       toast.success("Comentário adicionado");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao comentar"),
@@ -333,6 +424,7 @@ export function useComments(cardId: string | null) {
     mutationFn: (id: string) => deleteComment(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.comments(cardId!) });
+      qc.invalidateQueries({ queryKey: queryKeys.commentCounts });
       toast.success("Comentário excluído");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao excluir"),

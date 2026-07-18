@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { CheckSquare, Trash2 } from "lucide-react";
+import { CheckSquare, MessageSquare, Trash2 } from "lucide-react";
 import type { Card } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ type Props = {
   card: Card;
   completed: number;
   total: number;
+  commentCount?: number;
   onClick?: () => void;
   onDelete?: () => void;
   dragging?: boolean;
@@ -20,6 +21,7 @@ export function KanbanCard({
   card,
   completed,
   total,
+  commentCount = 0,
   onClick,
   onDelete,
   dragging,
@@ -87,13 +89,25 @@ export function KanbanCard({
           <p className="font-mono text-sm font-semibold tracking-tight text-slate-900">
             {title}
           </p>
-          <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <CheckSquare className="h-3.5 w-3.5 text-teal-700" />
             <span>
               {completed}/{total} concluídos
             </span>
             <span className="text-slate-300">·</span>
             <span>{pct}%</span>
+            {commentCount > 0 && (
+              <>
+                <span className="text-slate-300">·</span>
+                <span
+                  className="inline-flex items-center gap-1 text-slate-600"
+                  title={`${commentCount} comentário(s)`}
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-sky-700" />
+                  {commentCount}
+                </span>
+              </>
+            )}
           </div>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
             <div

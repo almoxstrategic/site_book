@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
+import { DEFAULT_CHECKLIST } from "@/lib/checklist-defaults";
 import type {
   Card,
   CardChecklistItem,
@@ -165,11 +166,14 @@ export async function fetchChecklistItems(): Promise<CardChecklistItem[]> {
   const { data, error } = await supabase
     .from("card_checklist_items")
     .select(
-      `*, checklist_templates(*, checklist_categories(*))`
+      `*, checklist_templates(*, checklist_categories(*)), checklist_categories(*)`
     );
   if (error) throw error;
   return (data as CardChecklistItem[]) ?? [];
 }
+
+const CHECKLIST_SELECT =
+  `*, checklist_templates(*, checklist_categories(*)), checklist_categories(*)`;
 
 export async function toggleChecklistItem(
   itemId: string,
@@ -179,10 +183,174 @@ export async function toggleChecklistItem(
     .from("card_checklist_items")
     .update({ is_completed: isCompleted })
     .eq("id", itemId)
-    .select(`*, checklist_templates(*, checklist_categories(*))`)
+    .select(CHECKLIST_SELECT)
     .single();
   if (error) throw error;
   return data as CardChecklistItem;
+}
+
+export async function updateChecklistItemLabel(
+  itemId: string,
+  label: string
+): Promise<CardChecklistItem> {
+  const { data, error } = await supabase
+    .from("card_checklist_items")
+    .update({ label: label.trim() || null })
+    .eq("id", itemId)
+    .select(CHECKLIST_SELECT)
+    .single();
+  if (error) throw error;
+  return data as CardChecklistItem;
+}
+
+export async function addChecklistItem(params: {
+  cardId: string;
+  categoryId: string;
+  label?: string;
+}): Promise<CardChecklistItem> {
+  const { data: max } = await supabase
+    .from("card_checklist_items")
+    .select("sort_order")
+    .eq("card_id", params.cardId)
+    .eq("category_id", params.categoryId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("card_checklist_items")
+    .insert({
+      card_id: params.cardId,
+      category_id: params.categoryId,
+      template_id: null,
+      label: params.label?.trim() || "",
+      is_completed: false,
+      sort_order: (max?.sort_order ?? -1) + 1,
+    })
+    .select(CHECKLIST_SELECT)
+    .single();
+  if (error) throw error;
+  return data as CardChecklistItem;
+}
+
+export async function deleteChecklistItem(itemId: string): Promise<void> {
+  const { error } = await supabase
+    .from("card_checklist_items")
+    .delete()
+    .eq("id", itemId);
+  if (error) throw error;
+}
+
+export async function seedDefaultChecklists(
+  cardId: string
+): Promise<{ items: CardChecklistItem[]; added: number }> {
+  const { data: categories, error: catErr } = await supabase
+    .from("checklist_categories")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (catErr) throw catErr;
+
+  const { data: templates, error: tmplErr } = await supabase
+    .from("checklist_templates")
+    .select("*")
+    .order("sort_order", { ascending: true });
+  if (tmplErr) throw tmplErr;
+
+  const { data: existing, error: existErr } = await supabase
+    .from("card_checklist_items")
+    .select("id, template_id, label, category_id")
+    .eq("card_id", cardId);
+  if (existErr) throw existErr;
+
+  const cats = [...(categories ?? [])];
+  const tmpls = [...(templates ?? [])];
+  let catSort = cats.reduce((m, c) => Math.max(m, c.sort_order), -1);
+
+  const ensureCategory = async (name: string) => {
+    const found = cats.find((c) => c.name === name);
+    if (found) return found;
+    catSort += 1;
+    const { data, error } = await supabase
+      .from("checklist_categories")
+      .insert({ name, sort_order: catSort })
+      .select()
+      .single();
+    if (error) throw error;
+    cats.push(data);
+    return data;
+  };
+
+  const ensureTemplate = async (
+    categoryId: string,
+    label: string,
+    sortOrder: number
+  ) => {
+    const found = tmpls.find(
+      (t) => t.category_id === categoryId && t.label === label
+    );
+    if (found) return found;
+    const { data, error } = await supabase
+      .from("checklist_templates")
+      .insert({ category_id: categoryId, label, sort_order: sortOrder })
+      .select()
+      .single();
+    if (error) throw error;
+    tmpls.push(data);
+    return data;
+  };
+
+  const existingTemplateIds = new Set(
+    (existing ?? []).map((i) => i.template_id).filter(Boolean) as string[]
+  );
+  const existingLabels = new Set(
+    (existing ?? [])
+      .map((i) => `${i.category_id}::${(i.label ?? "").trim().toLowerCase()}`)
+      .filter((k) => !k.endsWith("::"))
+  );
+
+  const toInsert: {
+    card_id: string;
+    template_id: string;
+    category_id: string;
+    label: string | null;
+    is_completed: boolean;
+    sort_order: number;
+  }[] = [];
+
+  for (const group of DEFAULT_CHECKLIST) {
+    const category = await ensureCategory(group.category);
+    for (let i = 0; i < group.items.length; i++) {
+      const label = group.items[i];
+      const template = await ensureTemplate(category.id, label, i);
+      if (existingTemplateIds.has(template.id)) continue;
+      if (existingLabels.has(`${category.id}::${label.toLowerCase()}`)) continue;
+      toInsert.push({
+        card_id: cardId,
+        template_id: template.id,
+        category_id: category.id,
+        label: null,
+        is_completed: false,
+        sort_order: i,
+      });
+    }
+  }
+
+  if (toInsert.length === 0) {
+    const items = await fetchChecklistItems().then((all) =>
+      all.filter((i) => i.card_id === cardId)
+    );
+    return { items, added: 0 };
+  }
+
+  const { error: insertErr } = await supabase
+    .from("card_checklist_items")
+    .insert(toInsert);
+  if (insertErr) throw insertErr;
+
+  const items = await fetchChecklistItems().then((all) =>
+    all.filter((i) => i.card_id === cardId)
+  );
+  return { items, added: toInsert.length };
 }
 
 export async function fetchTemplates(): Promise<ChecklistTemplate[]> {
@@ -192,6 +360,16 @@ export async function fetchTemplates(): Promise<ChecklistTemplate[]> {
     .order("sort_order", { ascending: true });
   if (error) throw error;
   return (data as ChecklistTemplate[]) ?? [];
+}
+
+export async function fetchCommentCounts(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.from("comments").select("card_id");
+  if (error) throw error;
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    counts[row.card_id] = (counts[row.card_id] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export async function fetchComments(cardId: string): Promise<Comment[]> {
