@@ -166,8 +166,8 @@ export function FiltersDashboard() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
-      <div className="shrink-0 rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur sm:p-5">
+    <div className="flex h-auto flex-col gap-4 pb-8 md:h-full md:min-h-0 md:overflow-hidden md:pb-0">
+      <div className="h-fit shrink-0 rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur sm:p-5">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
           <Filter className="h-4 w-4 text-teal-700" />
           Filtros de relatório
@@ -320,7 +320,7 @@ export function FiltersDashboard() {
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex h-auto flex-col overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm md:min-h-0 md:flex-1 md:overflow-hidden">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">Resultados</p>
@@ -331,7 +331,7 @@ export function FiltersDashboard() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        <div className="overflow-x-auto md:min-h-0 md:flex-1 md:overflow-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(241_245_249)]">
               <tr>

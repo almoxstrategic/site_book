@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   useSensor,
   useSensors,
@@ -63,7 +64,12 @@ export function KanbanBoard() {
   const [newCardId, setNewCardId] = useState("");
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 },
+    })
   );
 
   const cardsByColumn = useMemo(() => {
@@ -164,15 +170,16 @@ export function KanbanBoard() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex shrink-0 flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
         <p className="text-sm text-slate-600">
           Arraste cards entre colunas ou reordene na mesma coluna. Clique para
           abrir detalhes.
         </p>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
           <Button
             variant="outline"
             size="sm"
+            className="w-full md:w-auto"
             onClick={() => {
               try {
                 if (cards.length === 0) {
@@ -188,7 +195,11 @@ export function KanbanBoard() {
           >
             <FileSpreadsheet /> Exportar para Excel
           </Button>
-          <Button onClick={() => setNewColumnOpen(true)} size="sm">
+          <Button
+            onClick={() => setNewColumnOpen(true)}
+            size="sm"
+            className="w-full md:w-auto"
+          >
             <Plus /> Nova coluna
           </Button>
         </div>
@@ -202,7 +213,7 @@ export function KanbanBoard() {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="flex h-0 min-h-0 w-full min-w-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
+        <div className="scrollbar-none flex h-0 min-h-0 w-full min-w-0 flex-1 flex-nowrap items-stretch gap-4 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 [-webkit-overflow-scrolling:touch]">
           {columns.map((column) => {
             const columnCards = cardsByColumn.get(column.id) ?? [];
             const isDropTarget =

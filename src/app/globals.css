@@ -41,3 +41,13 @@ body {
 .animate-fade-up-delay {
   animation: fade-up 0.55s ease-out 0.08s both;
 }
+
+/* Hide native scrollbar while keeping touch/mouse scroll */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
