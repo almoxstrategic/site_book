@@ -1,4 +1,4 @@
-/** Default checklist used by "Adicionar Checklists Padrão". */
+/** Default checklist used by "Adicionar Checklists Padrão" and Relatórios filters. */
 export const DEFAULT_CHECKLIST: {
   category: string;
   items: string[];
@@ -21,7 +21,7 @@ export const DEFAULT_CHECKLIST: {
       "3.1 - Carta Início de Obra",
       "3.2 - Cronograma de Obra",
       "3.3 - Template de Energia",
-      "4.3 - As-Build",
+      "4.3 - As-Built",
       "5.2 - Certificado de Garantia da Implantação Civil",
       "5.3 - Certificados Galvanização",
       "6.1 - Laudo do Ensaio de Resistência do Concreto",
@@ -33,11 +33,15 @@ export const DEFAULT_CHECKLIST: {
     category: "Etapa final",
     items: [
       "7.1 - Relatório Final - RFI",
-      "ENVIO SITE BOOK",
+      "ENVIO DO SITEBOOK",
       "STATUS DE ACEITAÇÃO",
     ],
   },
 ];
+
+export const VALID_TASK_LABELS = new Set(
+  DEFAULT_CHECKLIST.flatMap((group) => group.items)
+);
 
 export function checklistItemLabel(item: {
   label?: string | null;

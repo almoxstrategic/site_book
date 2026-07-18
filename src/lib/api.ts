@@ -256,12 +256,6 @@ export async function seedDefaultChecklists(
     .order("sort_order", { ascending: true });
   if (tmplErr) throw tmplErr;
 
-  const { data: existing, error: existErr } = await supabase
-    .from("card_checklist_items")
-    .select("id, template_id, label, category_id")
-    .eq("card_id", cardId);
-  if (existErr) throw existErr;
-
   const cats = [...(categories ?? [])];
   const tmpls = [...(templates ?? [])];
   let catSort = cats.reduce((m, c) => Math.max(m, c.sort_order), -1);
@@ -299,48 +293,39 @@ export async function seedDefaultChecklists(
     return data;
   };
 
-  const existingTemplateIds = new Set(
-    (existing ?? []).map((i) => i.template_id).filter(Boolean) as string[]
-  );
-  const existingLabels = new Set(
-    (existing ?? [])
-      .map((i) => `${i.category_id}::${(i.label ?? "").trim().toLowerCase()}`)
-      .filter((k) => !k.endsWith("::"))
-  );
-
-  const toInsert: {
-    card_id: string;
+  const resolved: {
     template_id: string;
     category_id: string;
-    label: string | null;
-    is_completed: boolean;
     sort_order: number;
   }[] = [];
 
   for (const group of DEFAULT_CHECKLIST) {
     const category = await ensureCategory(group.category);
     for (let i = 0; i < group.items.length; i++) {
-      const label = group.items[i];
-      const template = await ensureTemplate(category.id, label, i);
-      if (existingTemplateIds.has(template.id)) continue;
-      if (existingLabels.has(`${category.id}::${label.toLowerCase()}`)) continue;
-      toInsert.push({
-        card_id: cardId,
+      const template = await ensureTemplate(category.id, group.items[i], i);
+      resolved.push({
         template_id: template.id,
         category_id: category.id,
-        label: null,
-        is_completed: false,
         sort_order: i,
       });
     }
   }
 
-  if (toInsert.length === 0) {
-    const items = await fetchChecklistItems().then((all) =>
-      all.filter((i) => i.card_id === cardId)
-    );
-    return { items, added: 0 };
-  }
+  // Replace this card's checklist with exactly the default structure
+  const { error: deleteErr } = await supabase
+    .from("card_checklist_items")
+    .delete()
+    .eq("card_id", cardId);
+  if (deleteErr) throw deleteErr;
+
+  const toInsert = resolved.map((r) => ({
+    card_id: cardId,
+    template_id: r.template_id,
+    category_id: r.category_id,
+    label: null as string | null,
+    is_completed: false,
+    sort_order: r.sort_order,
+  }));
 
   const { error: insertErr } = await supabase
     .from("card_checklist_items")

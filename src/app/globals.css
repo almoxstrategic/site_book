@@ -23,7 +23,6 @@ body {
     linear-gradient(180deg, #eef3f2 0%, #f7f9f8 40%, #f4f7f6 100%);
   color: var(--foreground);
   font-family: var(--font-outfit), system-ui, sans-serif;
-  min-height: 100vh;
 }
 
 @keyframes fade-up {

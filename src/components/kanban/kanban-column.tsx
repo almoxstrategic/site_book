@@ -34,11 +34,11 @@ export function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex w-[300px] shrink-0 flex-col rounded-xl border border-slate-200/80 bg-slate-50/90 shadow-sm transition-colors",
+        "flex h-full max-h-full w-[300px] min-w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/90 shadow-sm transition-colors",
         isOver && "border-teal-400 bg-teal-50/50 ring-2 ring-teal-200/60"
       )}
     >
-      <div className="flex items-start justify-between gap-2 border-b border-slate-200/70 px-3 py-3">
+      <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-200/70 px-3 py-3">
         <div className="min-w-0 flex-1">
           {editing ? (
             <Input
@@ -111,7 +111,9 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <div className="flex-1 space-y-2 overflow-y-auto p-3">{children}</div>
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden p-3">
+        {children}
+      </div>
     </div>
   );
 }

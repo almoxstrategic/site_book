@@ -137,7 +137,7 @@ export function KanbanBoard() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[60vh] items-center justify-center text-slate-500">
+      <div className="flex h-full items-center justify-center text-slate-500">
         Carregando board…
       </div>
     );
@@ -145,15 +145,15 @@ export function KanbanBoard() {
 
   if (isError) {
     return (
-      <div className="flex h-[60vh] items-center justify-center text-rose-600">
+      <div className="flex h-full items-center justify-center text-rose-600">
         Erro ao carregar dados do Supabase. Verifique as variáveis de ambiente.
       </div>
     );
   }
 
   return (
-    <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-slate-600">
           Arraste cards entre colunas ou reordene na mesma coluna. Clique para
           abrir detalhes.
@@ -170,7 +170,7 @@ export function KanbanBoard() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex min-h-0 w-full min-w-0 flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-2">
           {columns.map((column) => {
             const columnCards = cardsByColumn.get(column.id) ?? [];
             return (
@@ -336,6 +336,6 @@ export function KanbanBoard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

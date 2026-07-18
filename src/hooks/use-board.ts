@@ -362,7 +362,7 @@ export function useBoardMutations() {
       if (result.added === 0) {
         toast.message("Checklists padrão já estão neste card");
       } else {
-        toast.success(`${result.added} item(ns) padrão adicionados`);
+        toast.success(`Checklists padrão aplicados (${result.added} itens)`);
       }
     },
     onError: (e: Error) =>

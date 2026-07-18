@@ -8,8 +8,8 @@ import { SelectedCardProvider } from "@/hooks/use-selected-card";
 
 export default function Home() {
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <header className="animate-fade-up mb-6">
+    <div className="mx-auto flex h-full w-full min-h-0 min-w-0 max-w-[1600px] flex-1 flex-col overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
+      <header className="animate-fade-up mb-4 shrink-0">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <div className="mb-2 flex items-center gap-2 text-teal-800">
@@ -30,8 +30,11 @@ export default function Home() {
       </header>
 
       <SelectedCardProvider>
-        <Tabs defaultValue="kanban" className="animate-fade-up-delay flex-1">
-          <TabsList>
+        <Tabs
+          defaultValue="kanban"
+          className="animate-fade-up-delay flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+        >
+          <TabsList className="shrink-0">
             <TabsTrigger value="kanban" className="gap-2">
               <Columns3 className="h-4 w-4" />
               Kanban
@@ -42,11 +45,17 @@ export default function Home() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="kanban" className="outline-none">
+          <TabsContent
+            value="kanban"
+            className="mt-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none data-[state=inactive]:hidden"
+          >
             <KanbanBoard />
           </TabsContent>
 
-          <TabsContent value="dashboard" className="outline-none">
+          <TabsContent
+            value="dashboard"
+            className="mt-4 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none data-[state=inactive]:hidden"
+          >
             <FiltersDashboard />
           </TabsContent>
         </Tabs>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy, Filter, RotateCcw } from "lucide-react";
+import { Check, ChevronsUpDown, Copy, Filter, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,15 +11,30 @@ import {
   Select,
   SelectContent,
   SelectItem,
-  SelectLabel,
-  SelectGroup,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { useBoardData, useBoardMutations } from "@/hooks/use-board";
 import { useSelectedCard } from "@/hooks/use-selected-card";
-import { checklistItemLabel } from "@/lib/checklist-defaults";
+import {
+  checklistItemLabel,
+  DEFAULT_CHECKLIST,
+} from "@/lib/checklist-defaults";
 import type { FilterStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const ALL_SITES = "__all_sites__";
 const ALL_TASKS = "__all_tasks__";
@@ -30,14 +45,15 @@ function statusLabel(isCompleted: boolean) {
 }
 
 export function FiltersDashboard() {
-  const { cards, checklist, templates, isLoading, isError } = useBoardData();
+  const { cards, checklist, isLoading, isError } = useBoardData();
   const { setChecklist } = useBoardMutations();
   const { openCard } = useSelectedCard();
 
   const [siteQuery, setSiteQuery] = useState("");
   const [siteId, setSiteId] = useState<string>(ALL_SITES);
-  const [templateId, setTemplateId] = useState<string>(ALL_TASKS);
+  const [taskLabel, setTaskLabel] = useState<string>(ALL_TASKS);
   const [status, setStatus] = useState<FilterStatus | "all">(DEFAULT_STATUS);
+  const [taskOpen, setTaskOpen] = useState(false);
 
   const sortedCards = useMemo(
     () =>
@@ -53,17 +69,6 @@ export function FiltersDashboard() {
     return map;
   }, [cards]);
 
-  const templatesByCategory = useMemo(() => {
-    const map = new Map<string, typeof templates>();
-    for (const t of templates) {
-      const cat = t.checklist_categories?.name ?? "Outros";
-      const list = map.get(cat) ?? [];
-      list.push(t);
-      map.set(cat, list);
-    }
-    return map;
-  }, [templates]);
-
   const rows = useMemo(() => {
     const q = siteQuery.trim().toLowerCase();
 
@@ -78,7 +83,10 @@ export function FiltersDashboard() {
           }
         }
 
-        if (templateId !== ALL_TASKS && item.template_id !== templateId) {
+        if (
+          taskLabel !== ALL_TASKS &&
+          checklistItemLabel(item) !== taskLabel
+        ) {
           return false;
         }
 
@@ -96,23 +104,20 @@ export function FiltersDashboard() {
         const labelB = checklistItemLabel(b);
         return labelA.localeCompare(labelB);
       });
-  }, [checklist, siteId, siteQuery, templateId, status, titleById]);
+  }, [checklist, siteId, siteQuery, taskLabel, status, titleById]);
 
-  const selectedTaskLabel =
-    templateId === ALL_TASKS
-      ? null
-      : (templates.find((t) => t.id === templateId)?.label ?? null);
+  const selectedTaskLabel = taskLabel === ALL_TASKS ? null : taskLabel;
 
   const hasActiveFilters =
     siteQuery.trim() !== "" ||
     siteId !== ALL_SITES ||
-    templateId !== ALL_TASKS ||
+    taskLabel !== ALL_TASKS ||
     status !== DEFAULT_STATUS;
 
   function clearFilters() {
     setSiteQuery("");
     setSiteId(ALL_SITES);
-    setTemplateId(ALL_TASKS);
+    setTaskLabel(ALL_TASKS);
     setStatus(DEFAULT_STATUS);
   }
 
@@ -140,7 +145,7 @@ export function FiltersDashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[40vh] items-center justify-center text-slate-500">
+      <div className="flex h-full items-center justify-center text-slate-500">
         Carregando filtros…
       </div>
     );
@@ -148,15 +153,15 @@ export function FiltersDashboard() {
 
   if (isError) {
     return (
-      <div className="flex h-[40vh] items-center justify-center text-rose-600">
+      <div className="flex h-full items-center justify-center text-rose-600">
         Erro ao carregar dados.
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur sm:p-5">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      <div className="shrink-0 rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur sm:p-5">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
           <Filter className="h-4 w-4 text-teal-700" />
           Filtros de relatório
@@ -200,24 +205,75 @@ export function FiltersDashboard() {
 
           <div className="space-y-2">
             <Label>Tarefa</Label>
-            <Select value={templateId} onValueChange={setTemplateId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Todas as tarefas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_TASKS}>Todas as tarefas</SelectItem>
-                {[...templatesByCategory.entries()].map(([cat, items]) => (
-                  <SelectGroup key={cat}>
-                    <SelectLabel>{cat}</SelectLabel>
-                    {items.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.label}
-                      </SelectItem>
+            <Popover open={taskOpen} onOpenChange={setTaskOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={taskOpen}
+                  className="h-9 w-full justify-between font-normal"
+                >
+                  <span className="truncate">
+                    {taskLabel === ALL_TASKS ? "Todas as tarefas" : taskLabel}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar tarefa…" />
+                  <CommandList>
+                    <CommandEmpty>Nenhuma tarefa encontrada.</CommandEmpty>
+                    <CommandGroup heading="Geral">
+                      <CommandItem
+                        value="Todas as tarefas"
+                        onSelect={() => {
+                          setTaskLabel(ALL_TASKS);
+                          setTaskOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "h-4 w-4",
+                            taskLabel === ALL_TASKS
+                              ? "opacity-100"
+                              : "opacity-0"
+                          )}
+                        />
+                        Todas as tarefas
+                      </CommandItem>
+                    </CommandGroup>
+                    {DEFAULT_CHECKLIST.map((group) => (
+                      <CommandGroup
+                        key={group.category}
+                        heading={group.category}
+                      >
+                        {group.items.map((label) => (
+                          <CommandItem
+                            key={label}
+                            value={label}
+                            onSelect={() => {
+                              setTaskLabel(label);
+                              setTaskOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "h-4 w-4",
+                                taskLabel === label
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              )}
+                            />
+                            <span className="truncate">{label}</span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
                     ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-2">
@@ -258,8 +314,8 @@ export function FiltersDashboard() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">Resultados</p>
             <p className="text-xs text-slate-500">
@@ -269,9 +325,9 @@ export function FiltersDashboard() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="min-h-0 flex-1 overflow-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(241_245_249)]">
               <tr>
                 <th className="px-4 py-3 font-medium">Nome do Site</th>
                 <th className="px-4 py-3 font-medium">Tarefa</th>
@@ -291,7 +347,8 @@ export function FiltersDashboard() {
               )}
               {rows.map((row) => {
                 const siteName = titleById.get(row.card_id) ?? row.card_id;
-                const taskLabel = checklistItemLabel(row) || selectedTaskLabel || "—";
+                const rowTaskLabel =
+                  checklistItemLabel(row) || selectedTaskLabel || "—";
                 return (
                   <tr
                     key={row.id}
@@ -301,12 +358,12 @@ export function FiltersDashboard() {
                       <button
                         type="button"
                         onClick={() => openCard(row.card_id)}
-                        className="text-left underline-offset-2 transition hover:text-teal-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 focus-visible:ring-offset-2 rounded-sm"
+                        className="rounded-sm text-left underline-offset-2 transition hover:text-teal-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/40 focus-visible:ring-offset-2"
                       >
                         {siteName}
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{taskLabel}</td>
+                    <td className="px-4 py-3 text-slate-600">{rowTaskLabel}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <Switch
