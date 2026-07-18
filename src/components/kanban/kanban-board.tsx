@@ -16,7 +16,8 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Plus } from "lucide-react";
+import { FileSpreadsheet, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +35,7 @@ import {
   useCardProgress,
 } from "@/hooks/use-board";
 import { useSelectedCard } from "@/hooks/use-selected-card";
+import { exportSitebooksToExcel } from "@/lib/export-sitebooks";
 import type { Card } from "@/lib/types";
 
 export function KanbanBoard() {
@@ -158,9 +160,29 @@ export function KanbanBoard() {
           Arraste cards entre colunas ou reordene na mesma coluna. Clique para
           abrir detalhes.
         </p>
-        <Button onClick={() => setNewColumnOpen(true)} size="sm">
-          <Plus /> Nova coluna
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              try {
+                if (cards.length === 0) {
+                  toast.error("Nenhum site para exportar");
+                  return;
+                }
+                exportSitebooksToExcel(cards, checklist);
+                toast.success("Arquivo Excel baixado");
+              } catch {
+                toast.error("Falha ao exportar para Excel");
+              }
+            }}
+          >
+            <FileSpreadsheet /> Exportar para Excel
+          </Button>
+          <Button onClick={() => setNewColumnOpen(true)} size="sm">
+            <Plus /> Nova coluna
+          </Button>
+        </div>
       </div>
 
       <DndContext

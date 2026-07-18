@@ -127,17 +127,23 @@ export function FiltersDashboard() {
       return;
     }
 
-    const text = rows
-      .map((r) => {
-        const site = titleById.get(r.card_id) ?? r.card_id;
-        const task = checklistItemLabel(r) || selectedTaskLabel || "Tarefa";
-        return `${site} - ${task} - ${statusLabel(r.is_completed)}`;
-      })
-      .join("\n");
+    const grouped = rows.reduce<Record<string, string[]>>((acc, r) => {
+      const task = checklistItemLabel(r) || selectedTaskLabel || "Tarefa";
+      const key = `${task} - ${statusLabel(r.is_completed)}:`;
+      const site = titleById.get(r.card_id) ?? r.card_id;
+      const list = acc[key] ?? [];
+      if (!list.includes(site)) list.push(site);
+      acc[key] = list;
+      return acc;
+    }, {});
+
+    const text = Object.entries(grouped)
+      .map(([header, sites]) => `${header}\n${sites.join("\n")}`)
+      .join("\n\n");
 
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${rows.length} linha(s) copiada(s)`);
+      toast.success(`${Object.keys(grouped).length} grupo(s) copiado(s)`);
     } catch {
       toast.error("Falha ao copiar para a área de transferência");
     }
