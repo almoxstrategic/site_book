@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Plus,
   Tag,
+  User,
   X,
 } from "lucide-react";
 import {
@@ -44,15 +45,6 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
-
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? "")
-    .join("") || "?";
-}
 
 function formatCommentDate(date: string) {
   const d = new Date(date);
@@ -99,7 +91,7 @@ export function CardDetailSheet({
   const [editingTitle, setEditingTitle] = useState(false);
   const [description, setDescription] = useState("");
   const [commentDraft, setCommentDraft] = useState("");
-  const [author] = useState("Vinicius Paula");
+  const [authorName, setAuthorName] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
   const [showDetails, setShowDetails] = useState(true);
@@ -522,32 +514,43 @@ export function CardDetailSheet({
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               <div className="mb-5 flex gap-2">
-                <Avatar name={author} />
-                <div className="min-w-0 flex-1">
+                <UserAvatar />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Input
+                    value={authorName}
+                    onChange={(e) => setAuthorName(e.target.value)}
+                    placeholder="Seu nome"
+                    className="h-9 border-slate-200 bg-white text-sm shadow-sm"
+                  />
                   <Textarea
                     value={commentDraft}
                     onChange={(e) => setCommentDraft(e.target.value)}
                     placeholder="Escrever um comentário..."
                     className="min-h-[72px] resize-none border-slate-200 bg-white text-sm shadow-sm"
                   />
-                  {commentDraft.trim() && (
-                    <Button
-                      size="sm"
-                      className="mt-2"
-                      disabled={comments.add.isPending}
-                      onClick={() =>
-                        comments.add.mutate(
-                          {
-                            author,
-                            content: commentDraft.trim(),
+                  <Button
+                    size="sm"
+                    disabled={
+                      !authorName.trim() ||
+                      !commentDraft.trim() ||
+                      comments.add.isPending
+                    }
+                    onClick={() =>
+                      comments.add.mutate(
+                        {
+                          author: authorName.trim(),
+                          content: commentDraft.trim(),
+                        },
+                        {
+                          onSuccess: () => {
+                            setCommentDraft("");
                           },
-                          { onSuccess: () => setCommentDraft("") }
-                        )
-                      }
-                    >
-                      Salvar
-                    </Button>
-                  )}
+                        }
+                      )
+                    }
+                  >
+                    Salvar
+                  </Button>
                 </div>
               </div>
 
@@ -561,11 +564,11 @@ export function CardDetailSheet({
                     );
                     return (
                       <li key={c.id} className="flex gap-2">
-                        <Avatar name={c.author} />
+                        <UserAvatar />
                         <div className="min-w-0 flex-1">
                           <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                             <span className="text-sm font-semibold text-slate-800">
-                              {c.author}
+                              {c.author || "Anônimo"}
                             </span>
                             <time
                               dateTime={c.created_at}
@@ -650,12 +653,9 @@ export function CardDetailSheet({
 
                 {showDetails && (
                   <li className="flex gap-2">
-                    <Avatar name={author} />
+                    <UserAvatar />
                     <p className="pt-1 text-sm leading-snug text-slate-600">
-                      <span className="font-semibold text-slate-800">
-                        {author}
-                      </span>{" "}
-                      adicionou este cartão a{" "}
+                      Alguém adicionou este cartão a{" "}
                       <span className="font-medium">{columnName}</span>{" "}
                       <time
                         dateTime={card.created_at}
@@ -681,13 +681,13 @@ export function CardDetailSheet({
   );
 }
 
-function Avatar({ name }: { name: string }) {
+function UserAvatar() {
   return (
     <div
-      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-500"
       aria-hidden
     >
-      {initials(name)}
+      <User className="h-4 w-4" />
     </div>
   );
 }
