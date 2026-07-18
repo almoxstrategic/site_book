@@ -4,14 +4,15 @@ import { BookOpen, Columns3, LayoutDashboard } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { FiltersDashboard } from "@/components/dashboard/filters-dashboard";
+import { SitesTotalCard } from "@/components/dashboard/sites-total-card";
 import { SelectedCardProvider } from "@/hooks/use-selected-card";
 
 export default function Home() {
   return (
     <div className="mx-auto flex h-full w-full min-h-0 min-w-0 max-w-[1600px] flex-1 flex-col overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
       <header className="animate-fade-up mb-4 shrink-0">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
             <div className="mb-2 flex items-center gap-2 text-teal-800">
               <BookOpen className="h-6 w-6" strokeWidth={1.75} />
               <span className="text-sm font-semibold uppercase tracking-[0.18em]">
@@ -26,6 +27,7 @@ export default function Home() {
               laudos e certificados em todos os sites.
             </p>
           </div>
+          <SitesTotalCard />
         </div>
       </header>
 
