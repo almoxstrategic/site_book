@@ -231,31 +231,43 @@ export function useBoardMutations() {
   const relocateCard = useMutation({
     mutationFn: moveCard,
     onMutate: async (vars) => {
-      await qc.cancelQueries({ queryKey: queryKeys.cards });
       const previous = qc.getQueryData(queryKeys.cards);
-      qc.setQueryData(queryKeys.cards, (old: Awaited<ReturnType<typeof fetchCards>> | undefined) => {
-        if (!old) return old;
-        const cards = [...old];
-        const idx = cards.findIndex((c) => c.id === vars.cardId);
-        if (idx === -1) return old;
-        const [moving] = cards.splice(idx, 1);
-        const updated = { ...moving, column_id: vars.toColumnId };
-        const sameColumn = cards
-          .filter((c) => c.column_id === vars.toColumnId)
-          .sort((a, b) => a.position - b.position);
-        sameColumn.splice(vars.toPosition, 0, updated);
-        const others = cards.filter((c) => c.column_id !== vars.toColumnId);
-        const reindexed = sameColumn.map((c, i) => ({ ...c, position: i, column_id: vars.toColumnId }));
-        if (vars.fromColumnId !== vars.toColumnId) {
-          const source = others
-            .filter((c) => c.column_id === vars.fromColumnId)
-            .sort((a, b) => a.position - b.position)
-            .map((c, i) => ({ ...c, position: i }));
-          const rest = others.filter((c) => c.column_id !== vars.fromColumnId);
-          return [...rest, ...source, ...reindexed];
+
+      // Apply optimistic move synchronously before any await
+      qc.setQueryData(
+        queryKeys.cards,
+        (old: Awaited<ReturnType<typeof fetchCards>> | undefined) => {
+          if (!old) return old;
+          const cards = [...old];
+          const idx = cards.findIndex((c) => c.id === vars.cardId);
+          if (idx === -1) return old;
+          const [moving] = cards.splice(idx, 1);
+          const updated = { ...moving, column_id: vars.toColumnId };
+          const sameColumn = cards
+            .filter((c) => c.column_id === vars.toColumnId)
+            .sort((a, b) => a.position - b.position);
+          sameColumn.splice(vars.toPosition, 0, updated);
+          const others = cards.filter((c) => c.column_id !== vars.toColumnId);
+          const reindexed = sameColumn.map((c, i) => ({
+            ...c,
+            position: i,
+            column_id: vars.toColumnId,
+          }));
+          if (vars.fromColumnId !== vars.toColumnId) {
+            const source = others
+              .filter((c) => c.column_id === vars.fromColumnId)
+              .sort((a, b) => a.position - b.position)
+              .map((c, i) => ({ ...c, position: i }));
+            const rest = others.filter(
+              (c) => c.column_id !== vars.fromColumnId
+            );
+            return [...rest, ...source, ...reindexed];
+          }
+          return [...others, ...reindexed];
         }
-        return [...others, ...reindexed];
-      });
+      );
+
+      await qc.cancelQueries({ queryKey: queryKeys.cards });
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
@@ -263,7 +275,8 @@ export function useBoardMutations() {
       toast.error(e.message || "Erro ao mover card");
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.cards });
+      // Background reconcile — UI already updated optimistically
+      void qc.invalidateQueries({ queryKey: queryKeys.cards });
     },
   });
 

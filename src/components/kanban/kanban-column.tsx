@@ -12,6 +12,7 @@ type Props = {
   column: Column;
   count: number;
   children: React.ReactNode;
+  isDropTarget?: boolean;
   onAddCard: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
@@ -21,6 +22,7 @@ export function KanbanColumn({
   column,
   count,
   children,
+  isDropTarget = false,
   onAddCard,
   onRename,
   onDelete,
@@ -29,13 +31,15 @@ export function KanbanColumn({
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(column.name);
   const [menuOpen, setMenuOpen] = useState(false);
+  const highlighted = isDropTarget || isOver;
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
         "flex h-full min-h-0 w-[300px] min-w-[300px] shrink-0 flex-col self-stretch overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/90 shadow-sm transition-colors",
-        isOver && "border-teal-400 bg-teal-50/50 ring-2 ring-teal-200/60"
+        highlighted &&
+          "border-2 border-green-500 bg-green-50/30 ring-2 ring-green-200/50"
       )}
     >
       <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-200/70 px-3 py-3">

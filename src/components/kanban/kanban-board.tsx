@@ -53,6 +53,8 @@ export function KanbanBoard() {
   const { openCard } = useSelectedCard();
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
+  const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [newColumnOpen, setNewColumnOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [newCardOpen, setNewCardOpen] = useState<{
@@ -84,30 +86,43 @@ export function KanbanBoard() {
   function handleDragStart(event: DragStartEvent) {
     const card = cards.find((c) => c.id === event.active.id);
     setActiveCard(card ?? null);
+    setActiveColumnId(card?.column_id ?? null);
+    setOverColumnId(card?.column_id ?? null);
   }
 
   function handleDragOver(event: DragOverEvent) {
-    const { active, over } = event;
-    if (!over) return;
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const from = findContainer(activeId);
-    const to = findContainer(overId);
-    if (!from || !to || from === to) return;
+    const { over } = event;
+    if (!over) {
+      setOverColumnId(null);
+      return;
+    }
+    const to = findContainer(String(over.id));
+    setOverColumnId(to ?? null);
+  }
+
+  function handleDragCancel() {
+    setActiveCard(null);
+    setActiveColumnId(null);
+    setOverColumnId(null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    const fromColumnId = activeColumnId;
     setActiveCard(null);
+    setActiveColumnId(null);
+    setOverColumnId(null);
     if (!over) return;
 
     const activeId = String(active.id);
     const overId = String(over.id);
-    const fromColumnId = findContainer(activeId);
+    const resolvedFrom = fromColumnId ?? findContainer(activeId);
     const toColumnId = findContainer(overId);
-    if (!fromColumnId || !toColumnId) return;
+    if (!resolvedFrom || !toColumnId) return;
 
-    const targetList = cardsByColumn.get(toColumnId) ?? [];
+    const targetList = (cardsByColumn.get(toColumnId) ?? []).filter(
+      (c) => c.id !== activeId
+    );
     let toPosition = targetList.findIndex((c) => c.id === overId);
     if (columns.some((c) => c.id === overId)) {
       toPosition = targetList.length;
@@ -123,15 +138,9 @@ export function KanbanBoard() {
       return;
     }
 
-    // When dropping onto another card in same column after it, adjust
-    if (fromColumnId === toColumnId) {
-      const fromPos = current?.position ?? 0;
-      if (fromPos < toPosition) toPosition = Math.max(0, toPosition);
-    }
-
     relocateCard.mutate({
       cardId: activeId,
-      fromColumnId,
+      fromColumnId: resolvedFrom,
       toColumnId,
       toPosition,
     });
@@ -191,15 +200,21 @@ export function KanbanBoard() {
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
         <div className="flex h-0 min-h-0 w-full min-w-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
           {columns.map((column) => {
             const columnCards = cardsByColumn.get(column.id) ?? [];
+            const isDropTarget =
+              !!activeCard &&
+              overColumnId === column.id &&
+              activeColumnId !== column.id;
             return (
               <KanbanColumn
                 key={column.id}
                 column={column}
                 count={columnCards.length}
+                isDropTarget={isDropTarget}
                 onAddCard={() => setNewCardOpen({ columnId: column.id })}
                 onRename={(name) =>
                   renameColumn.mutate({ id: column.id, name })
@@ -251,16 +266,15 @@ export function KanbanBoard() {
           })}
         </div>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null} style={{ cursor: "grabbing" }}>
           {activeCard ? (
-            <div className="rotate-2 opacity-95">
-              <KanbanCard
-                card={activeCard}
-                completed={progress.get(activeCard.id)?.completed ?? 0}
-                total={progress.get(activeCard.id)?.total ?? 0}
-                dragging
-              />
-            </div>
+            <KanbanCard
+              card={activeCard}
+              completed={progress.get(activeCard.id)?.completed ?? 0}
+              total={progress.get(activeCard.id)?.total ?? 0}
+              commentCount={commentCounts[activeCard.id] ?? 0}
+              dragOverlay
+            />
           ) : null}
         </DragOverlay>
       </DndContext>
