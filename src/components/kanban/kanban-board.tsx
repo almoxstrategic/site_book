@@ -170,7 +170,7 @@ export function KanbanBoard() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex min-h-0 w-full min-w-0 flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-2">
+        <div className="flex h-0 min-h-0 w-full min-w-0 flex-1 items-stretch gap-4 overflow-x-auto overflow-y-hidden pb-2">
           {columns.map((column) => {
             const columnCards = cardsByColumn.get(column.id) ?? [];
             return (
@@ -196,7 +196,7 @@ export function KanbanBoard() {
                   items={columnCards.map((c) => c.id)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="flex min-h-[120px] flex-col gap-2">
+                  <div className="flex flex-col gap-2">
                     {columnCards.map((card) => {
                       const p = progress.get(card.id) ?? {
                         completed: 0,

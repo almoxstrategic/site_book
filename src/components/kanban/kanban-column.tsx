@@ -34,7 +34,7 @@ export function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex h-full max-h-full w-[300px] min-w-[300px] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/90 shadow-sm transition-colors",
+        "flex h-full min-h-0 w-[300px] min-w-[300px] shrink-0 flex-col self-stretch overflow-hidden rounded-xl border border-slate-200/80 bg-slate-50/90 shadow-sm transition-colors",
         isOver && "border-teal-400 bg-teal-50/50 ring-2 ring-teal-200/60"
       )}
     >
@@ -111,7 +111,7 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overflow-x-hidden p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-3">
         {children}
       </div>
     </div>
