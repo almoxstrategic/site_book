@@ -19,7 +19,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={client}>
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden">
         {children}
       </div>
       <Toaster richColors position="top-right" closeButton />

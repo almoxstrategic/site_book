@@ -29,7 +29,7 @@ export default function RootLayout({
       lang="pt-BR"
       className={`${outfit.variable} ${jetbrains.variable} h-full antialiased`}
     >
-      <body className="flex min-h-screen flex-col overflow-y-auto">
+      <body className="flex min-h-screen flex-col overflow-x-hidden overflow-y-auto">
         <Providers>{children}</Providers>
       </body>
     </html>

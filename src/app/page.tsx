@@ -9,7 +9,7 @@ import { SelectedCardProvider } from "@/hooks/use-selected-card";
 
 export default function Home() {
   return (
-    <div className="mx-auto flex min-h-screen w-full min-w-0 max-w-[1600px] flex-1 flex-col px-4 py-3 pb-8 sm:px-6 lg:px-8">
+    <div className="mx-auto flex min-h-screen w-full min-w-0 max-w-[1600px] flex-1 flex-col overflow-x-hidden px-4 py-3 pb-8 sm:px-6 lg:px-8">
       <header className="animate-fade-up mb-2 shrink-0">
         <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0 flex-1">
@@ -34,7 +34,7 @@ export default function Home() {
       <SelectedCardProvider>
         <Tabs
           defaultValue="kanban"
-          className="animate-fade-up-delay flex min-h-0 min-w-0 flex-1 flex-col"
+          className="animate-fade-up-delay flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden"
         >
           <TabsList className="flex h-auto w-full shrink-0 flex-wrap justify-start gap-1 sm:w-auto">
             <TabsTrigger value="kanban" className="flex-1 gap-2 sm:flex-none">
