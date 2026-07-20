@@ -62,21 +62,80 @@ export function exportSitebooksToExcel(
 
 export type FilteredReportRow = {
   nome: string;
+  posicao: string;
   descricao: string;
   isCompleted: boolean;
 };
 
-/** Exports the currently filtered Relatórios rows (Nome, Descrição, Status). */
+/** Exports the currently filtered Relatórios rows (Nome, Posição, Tarefa, Status). */
 export function exportFilteredReportToExcel(rows: FilteredReportRow[]) {
   const data = rows.map((row) => ({
-    Nome: row.nome,
-    Descrição: row.descricao,
-    Status: row.isCompleted ? "Concluído" : "Pendente",
+    "Nome do Site": row.nome,
+    Posição: row.posicao,
+    Tarefa: row.descricao,
+    Status: row.isCompleted ? "Feito" : "Pendente",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data, {
-    header: ["Nome", "Descrição", "Status"],
+    header: ["Nome do Site", "Posição", "Tarefa", "Status"],
   });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório");
+  XLSX.writeFile(workbook, "relatorio_filtrado.xlsx");
+}
+
+export type CrossFilteredReportRow = {
+  siteName: string;
+  columnName: string;
+  task1Label: string;
+  task1Completed: boolean;
+  task2Label: string | null;
+  task2Completed: boolean | null;
+};
+
+/** Exports site-level cross-filtered Relatórios rows with dynamic task columns. */
+export function exportCrossFilteredReportToExcel(
+  rows: CrossFilteredReportRow[]
+) {
+  const hasTask2 = rows.some((r) => r.task2Label);
+
+  const header = hasTask2
+    ? [
+        "Nome do Site",
+        "Posição",
+        "Tarefa 1",
+        "Status 1",
+        "Tarefa 2",
+        "Status 2",
+      ]
+    : ["Nome do Site", "Posição", "Tarefa", "Status"];
+
+  const data = rows.map((row) => {
+    if (hasTask2) {
+      return {
+        "Nome do Site": row.siteName,
+        Posição: row.columnName,
+        "Tarefa 1": row.task1Label,
+        "Status 1": row.task1Completed ? "Feito" : "Pendente",
+        "Tarefa 2": row.task2Label ?? "—",
+        "Status 2":
+          row.task2Completed === null
+            ? "—"
+            : row.task2Completed
+              ? "Feito"
+              : "Pendente",
+      };
+    }
+
+    return {
+      "Nome do Site": row.siteName,
+      Posição: row.columnName,
+      Tarefa: row.task1Label,
+      Status: row.task1Completed ? "Feito" : "Pendente",
+    };
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(data, { header });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório");
   XLSX.writeFile(workbook, "relatorio_filtrado.xlsx");
