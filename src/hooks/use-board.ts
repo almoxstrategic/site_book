@@ -19,6 +19,7 @@ import {
   fetchComments,
   fetchTemplates,
   moveCard,
+  reorderColumns,
   seedDefaultChecklists,
   toggleChecklistItem,
   updateCard,
@@ -27,7 +28,7 @@ import {
   updateComment,
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
-import type { CardChecklistItem } from "@/lib/types";
+import type { CardChecklistItem, Column } from "@/lib/types";
 
 export const queryKeys = {
   columns: ["columns"] as const,
@@ -178,6 +179,35 @@ export function useBoardMutations() {
       toast.success("Coluna excluída");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao excluir coluna"),
+  });
+
+  const relocateColumns = useMutation({
+    mutationFn: (orderedIds: string[]) => reorderColumns(orderedIds),
+    onMutate: async (orderedIds) => {
+      await qc.cancelQueries({ queryKey: queryKeys.columns });
+      const previous = qc.getQueryData(queryKeys.columns);
+      qc.setQueryData(
+        queryKeys.columns,
+        (old: Column[] | undefined) => {
+          if (!old) return old;
+          const byId = new Map(old.map((c) => [c.id, c]));
+          return orderedIds
+            .map((id, position) => {
+              const col = byId.get(id);
+              return col ? { ...col, position } : null;
+            })
+            .filter((c): c is Column => c !== null);
+        }
+      );
+      return { previous };
+    },
+    onError: (e: Error, _v, ctx) => {
+      if (ctx?.previous) qc.setQueryData(queryKeys.columns, ctx.previous);
+      toast.error(e.message || "Erro ao reordenar colunas");
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.columns });
+    },
   });
 
   const addCard = useMutation({
@@ -386,6 +416,7 @@ export function useBoardMutations() {
     addColumn,
     renameColumn,
     removeColumn,
+    relocateColumns,
     addCard,
     removeCard,
     editCard,

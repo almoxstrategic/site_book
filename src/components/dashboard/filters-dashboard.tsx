@@ -49,6 +49,7 @@ import type { CardChecklistItem, FilterStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ALL_SITES = "__all_sites__";
+const ALL_POSITIONS = "__all_positions__";
 const ALL_TASKS = "__all_tasks__";
 const NO_TASK = "__no_task__";
 const DEFAULT_STATUS: FilterStatus | "all" = "pending";
@@ -220,6 +221,7 @@ export function FiltersDashboard() {
   const { openCard } = useSelectedCard();
 
   const [siteId, setSiteId] = useState<string>(ALL_SITES);
+  const [columnId, setColumnId] = useState<string>(ALL_POSITIONS);
   const [task1, setTask1] = useState<string>(ALL_TASKS);
   const [status1, setStatus1] = useState<FilterStatus | "all">(DEFAULT_STATUS);
   const [task2, setTask2] = useState<string>(NO_TASK);
@@ -255,6 +257,12 @@ export function FiltersDashboard() {
     return map;
   }, [cards, columnNameById]);
 
+  const cardColumnIdById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of cards) map.set(c.id, c.column_id);
+    return map;
+  }, [cards]);
+
   const checklistByCard = useMemo(() => {
     const map = new Map<string, CardChecklistItem[]>();
     for (const item of checklist) {
@@ -275,6 +283,13 @@ export function FiltersDashboard() {
     return checklist
       .filter((item) => {
         if (siteId !== ALL_SITES && item.card_id !== siteId) return false;
+
+        if (
+          columnId !== ALL_POSITIONS &&
+          cardColumnIdById.get(item.card_id) !== columnId
+        ) {
+          return false;
+        }
 
         if (task1Specific && checklistItemLabel(item) !== task1) return false;
 
@@ -300,6 +315,8 @@ export function FiltersDashboard() {
     isCrossMode,
     checklist,
     siteId,
+    columnId,
+    cardColumnIdById,
     task1,
     task1Specific,
     status1,
@@ -316,6 +333,7 @@ export function FiltersDashboard() {
 
     for (const card of sortedCards) {
       if (siteId !== ALL_SITES && card.id !== siteId) continue;
+      if (columnId !== ALL_POSITIONS && card.column_id !== columnId) continue;
 
       const items = checklistByCard.get(card.id) ?? [];
       const item1 = items.find((i) => checklistItemLabel(i) === task1) ?? null;
@@ -342,6 +360,7 @@ export function FiltersDashboard() {
     isCrossMode,
     sortedCards,
     siteId,
+    columnId,
     checklistByCard,
     task1,
     task2,
@@ -357,6 +376,7 @@ export function FiltersDashboard() {
 
   const hasActiveFilters =
     siteId !== ALL_SITES ||
+    columnId !== ALL_POSITIONS ||
     task1Specific ||
     task2Active ||
     status1 !== DEFAULT_STATUS ||
@@ -367,6 +387,7 @@ export function FiltersDashboard() {
 
   function clearFilters() {
     setSiteId(ALL_SITES);
+    setColumnId(ALL_POSITIONS);
     setTask1(ALL_TASKS);
     setStatus1(DEFAULT_STATUS);
     setTask2(NO_TASK);
@@ -481,7 +502,7 @@ export function FiltersDashboard() {
           Filtros de relatório
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 xl:items-end">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-end">
           <div className="space-y-2">
             <Label>Nome do site</Label>
             <Popover open={siteOpen} onOpenChange={setSiteOpen}>
@@ -547,6 +568,23 @@ export function FiltersDashboard() {
             </Popover>
           </div>
 
+          <div className="space-y-2">
+            <Label>Posição</Label>
+            <Select value={columnId} onValueChange={setColumnId}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todas as posições" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_POSITIONS}>Todas as posições</SelectItem>
+                {columns.map((col) => (
+                  <SelectItem key={col.id} value={col.id}>
+                    {col.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <TaskCombobox
             label={showSecondFilter ? "Tarefa 1" : "Tarefa"}
             value={task1}
@@ -578,8 +616,8 @@ export function FiltersDashboard() {
         </div>
 
         {showSecondFilter && (
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3 xl:items-end">
-            <div className="hidden xl:block" />
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-end">
+            <div className="hidden xl:col-span-2 xl:block" />
             <TaskCombobox
               label="Tarefa 2"
               value={task2}

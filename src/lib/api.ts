@@ -48,6 +48,16 @@ export async function updateColumn(
   return data;
 }
 
+export async function reorderColumns(orderedIds: string[]): Promise<void> {
+  const results = await Promise.all(
+    orderedIds.map((id, position) =>
+      supabase.from("columns").update({ position }).eq("id", id)
+    )
+  );
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw failed.error;
+}
+
 export async function deleteColumn(id: string): Promise<void> {
   const { error } = await supabase.from("columns").delete().eq("id", id);
   if (error) throw error;

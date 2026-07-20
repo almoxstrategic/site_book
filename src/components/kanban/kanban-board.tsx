@@ -14,6 +14,8 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  arrayMove,
+  horizontalListSortingStrategy,
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
@@ -37,7 +39,7 @@ import {
 } from "@/hooks/use-board";
 import { useSelectedCard } from "@/hooks/use-selected-card";
 import { exportSitebooksToExcel } from "@/lib/export-sitebooks";
-import type { Card } from "@/lib/types";
+import type { Card, Column } from "@/lib/types";
 
 export function KanbanBoard() {
   const { columns, cards, checklist, commentCounts, isLoading, isError } =
@@ -47,6 +49,7 @@ export function KanbanBoard() {
     addColumn,
     renameColumn,
     removeColumn,
+    relocateColumns,
     addCard,
     removeCard,
     relocateCard,
@@ -54,6 +57,7 @@ export function KanbanBoard() {
   const { openCard } = useSelectedCard();
 
   const [activeCard, setActiveCard] = useState<Card | null>(null);
+  const [activeColumn, setActiveColumn] = useState<Column | null>(null);
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,6 +88,8 @@ export function KanbanBoard() {
     return map;
   }, [columns, cards]);
 
+  const columnIds = useMemo(() => columns.map((c) => c.id), [columns]);
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   function matchesSearch(card: Card) {
@@ -93,20 +99,37 @@ export function KanbanBoard() {
     return title.includes(normalizedQuery) || id.includes(normalizedQuery);
   }
 
+  function isColumnId(id: string) {
+    return columns.some((c) => c.id === id);
+  }
+
   function findContainer(id: string) {
-    if (columns.some((c) => c.id === id)) return id;
+    if (isColumnId(id)) return id;
     const card = cards.find((c) => c.id === id);
     return card?.column_id;
   }
 
   function handleDragStart(event: DragStartEvent) {
-    const card = cards.find((c) => c.id === event.active.id);
+    const activeId = String(event.active.id);
+    const column = columns.find((c) => c.id === activeId);
+    if (column) {
+      setActiveColumn(column);
+      setActiveCard(null);
+      setActiveColumnId(null);
+      setOverColumnId(null);
+      return;
+    }
+
+    const card = cards.find((c) => c.id === activeId);
     setActiveCard(card ?? null);
+    setActiveColumn(null);
     setActiveColumnId(card?.column_id ?? null);
     setOverColumnId(card?.column_id ?? null);
   }
 
   function handleDragOver(event: DragOverEvent) {
+    if (activeColumn) return;
+
     const { over } = event;
     if (!over) {
       setOverColumnId(null);
@@ -118,20 +141,40 @@ export function KanbanBoard() {
 
   function handleDragCancel() {
     setActiveCard(null);
+    setActiveColumn(null);
     setActiveColumnId(null);
     setOverColumnId(null);
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    const draggingColumn = activeColumn;
     const fromColumnId = activeColumnId;
+
     setActiveCard(null);
+    setActiveColumn(null);
     setActiveColumnId(null);
     setOverColumnId(null);
+
     if (!over) return;
 
     const activeId = String(active.id);
     const overId = String(over.id);
+
+    if (draggingColumn || isColumnId(activeId)) {
+      const oldIndex = columns.findIndex((c) => c.id === activeId);
+      let overColumnIdResolved = overId;
+      if (!isColumnId(overColumnIdResolved)) {
+        overColumnIdResolved = findContainer(overId) ?? "";
+      }
+      const newIndex = columns.findIndex((c) => c.id === overColumnIdResolved);
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
+
+      const orderedIds = arrayMove(columns, oldIndex, newIndex).map((c) => c.id);
+      relocateColumns.mutate(orderedIds);
+      return;
+    }
+
     const resolvedFrom = fromColumnId ?? findContainer(activeId);
     const toColumnId = findContainer(overId);
     if (!resolvedFrom || !toColumnId) return;
@@ -140,7 +183,7 @@ export function KanbanBoard() {
       (c) => c.id !== activeId
     );
     let toPosition = targetList.findIndex((c) => c.id === overId);
-    if (columns.some((c) => c.id === overId)) {
+    if (isColumnId(overId)) {
       toPosition = targetList.length;
     }
     if (toPosition < 0) toPosition = targetList.length;
@@ -183,8 +226,8 @@ export function KanbanBoard() {
       <div className="mb-4 flex shrink-0 flex-col gap-3">
         <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
           <p className="text-sm text-slate-600">
-            Arraste cards entre colunas ou reordene na mesma coluna. Clique para
-            abrir detalhes.
+            Arraste o cabeçalho da coluna para reordenar. Arraste cards entre
+            colunas ou clique para abrir detalhes.
           </p>
           <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
             <Button
@@ -238,75 +281,93 @@ export function KanbanBoard() {
         onDragCancel={handleDragCancel}
       >
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <div className="flex h-full w-full min-w-0 flex-nowrap items-stretch gap-4 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-4 [-webkit-overflow-scrolling:touch]">
-            {columns.map((column) => {
-              const columnCards = (cardsByColumn.get(column.id) ?? []).filter(
-                matchesSearch
-              );
-              const isDropTarget =
-                !!activeCard &&
-                overColumnId === column.id &&
-                activeColumnId !== column.id;
-              return (
-                <KanbanColumn
-                  key={column.id}
-                  column={column}
-                  count={columnCards.length}
-                  isDropTarget={isDropTarget}
-                  onAddCard={() => setNewCardOpen({ columnId: column.id })}
-                  onRename={(name) =>
-                    renameColumn.mutate({ id: column.id, name })
-                  }
-                  onDelete={() => {
-                    if (
-                      confirm(
-                        `Excluir a coluna "${column.name}" e todos os cards?`
-                      )
-                    ) {
-                      removeColumn.mutate(column.id);
+          <SortableContext
+            items={columnIds}
+            strategy={horizontalListSortingStrategy}
+          >
+            <div className="flex h-full w-full min-w-0 flex-nowrap items-stretch gap-4 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-4 [-webkit-overflow-scrolling:touch]">
+              {columns.map((column) => {
+                const columnCards = (cardsByColumn.get(column.id) ?? []).filter(
+                  matchesSearch
+                );
+                const isDropTarget =
+                  !!activeCard &&
+                  overColumnId === column.id &&
+                  activeColumnId !== column.id;
+                return (
+                  <KanbanColumn
+                    key={column.id}
+                    column={column}
+                    count={columnCards.length}
+                    isDropTarget={isDropTarget}
+                    onAddCard={() => setNewCardOpen({ columnId: column.id })}
+                    onRename={(name) =>
+                      renameColumn.mutate({ id: column.id, name })
                     }
-                  }}
-                >
-                  <SortableContext
-                    items={columnCards.map((c) => c.id)}
-                    strategy={verticalListSortingStrategy}
+                    onDelete={() => {
+                      if (
+                        confirm(
+                          `Excluir a coluna "${column.name}" e todos os cards?`
+                        )
+                      ) {
+                        removeColumn.mutate(column.id);
+                      }
+                    }}
                   >
-                    <div className="flex flex-col gap-2">
-                      {columnCards.map((card) => {
-                        const p = progress.get(card.id) ?? {
-                          completed: 0,
-                          total: 0,
-                        };
-                        return (
-                          <KanbanCard
-                            key={card.id}
-                            card={card}
-                            completed={p.completed}
-                            total={p.total}
-                            commentCount={commentCounts[card.id] ?? 0}
-                            onClick={() => openCard(card.id)}
-                            onDelete={() => {
-                              if (
-                                confirm(
-                                  `Excluir o site ${card.title || card.id}?`
-                                )
-                              ) {
-                                removeCard.mutate(card.id);
-                              }
-                            }}
-                          />
-                        );
-                      })}
-                    </div>
-                  </SortableContext>
-                </KanbanColumn>
-              );
-            })}
-          </div>
+                    <SortableContext
+                      items={columnCards.map((c) => c.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {columnCards.map((card) => {
+                          const p = progress.get(card.id) ?? {
+                            completed: 0,
+                            total: 0,
+                          };
+                          return (
+                            <KanbanCard
+                              key={card.id}
+                              card={card}
+                              completed={p.completed}
+                              total={p.total}
+                              commentCount={commentCounts[card.id] ?? 0}
+                              onClick={() => openCard(card.id)}
+                              onDelete={() => {
+                                if (
+                                  confirm(
+                                    `Excluir o site ${card.title || card.id}?`
+                                  )
+                                ) {
+                                  removeCard.mutate(card.id);
+                                }
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+                    </SortableContext>
+                  </KanbanColumn>
+                );
+              })}
+            </div>
+          </SortableContext>
         </div>
 
         <DragOverlay dropAnimation={null} style={{ cursor: "grabbing" }}>
-          {activeCard ? (
+          {activeColumn ? (
+            <KanbanColumn
+              column={activeColumn}
+              count={(cardsByColumn.get(activeColumn.id) ?? []).length}
+              onAddCard={() => {}}
+              onRename={() => {}}
+              onDelete={() => {}}
+              dragOverlay
+            >
+              <div className="rounded-md border border-dashed border-slate-200 bg-white/60 px-3 py-6 text-center text-xs text-slate-400">
+                Reordenando coluna…
+              </div>
+            </KanbanColumn>
+          ) : activeCard ? (
             <KanbanCard
               card={activeCard}
               completed={progress.get(activeCard.id)?.completed ?? 0}
