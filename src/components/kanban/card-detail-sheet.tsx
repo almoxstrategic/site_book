@@ -70,6 +70,33 @@ function itemCategoryId(item: CardChecklistItem) {
   );
 }
 
+function itemCategorySortOrder(item: CardChecklistItem) {
+  return (
+    item.checklist_categories?.sort_order ??
+    item.checklist_templates?.checklist_categories?.sort_order ??
+    Number.MAX_SAFE_INTEGER
+  );
+}
+
+function itemSortOrder(item: CardChecklistItem) {
+  return item.sort_order ?? item.checklist_templates?.sort_order ?? 0;
+}
+
+/** Stable checklist order: category → item sort_order → id (never by completion). */
+function compareChecklistItems(a: CardChecklistItem, b: CardChecklistItem) {
+  const byCategory = itemCategorySortOrder(a) - itemCategorySortOrder(b);
+  if (byCategory !== 0) return byCategory;
+
+  const catIdA = itemCategoryId(a) ?? "";
+  const catIdB = itemCategoryId(b) ?? "";
+  if (catIdA !== catIdB) return catIdA.localeCompare(catIdB);
+
+  const byOrder = itemSortOrder(a) - itemSortOrder(b);
+  if (byOrder !== 0) return byOrder;
+
+  return a.id.localeCompare(b.id);
+}
+
 export function CardDetailSheet({
   card,
   columns,
@@ -128,13 +155,7 @@ export function CardDetailSheet({
       string,
       { categoryId: string | null; items: CardChecklistItem[] }
     >();
-    const sorted = [...checklist].sort((a, b) => {
-      const ao =
-        a.sort_order ?? a.checklist_templates?.sort_order ?? 0;
-      const bo =
-        b.sort_order ?? b.checklist_templates?.sort_order ?? 0;
-      return ao - bo;
-    });
+    const sorted = [...checklist].sort(compareChecklistItems);
     for (const item of sorted) {
       const cat = itemCategoryName(item);
       const current = map.get(cat) ?? {

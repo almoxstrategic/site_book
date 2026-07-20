@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown, Copy, Filter, RotateCcw } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  Copy,
+  FileSpreadsheet,
+  Filter,
+  RotateCcw,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +40,7 @@ import {
   checklistItemLabel,
   DEFAULT_CHECKLIST,
 } from "@/lib/checklist-defaults";
+import { exportFilteredReportToExcel } from "@/lib/export-sitebooks";
 import type { FilterStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -146,6 +154,27 @@ export function FiltersDashboard() {
       toast.success(`${Object.keys(grouped).length} grupo(s) copiado(s)`);
     } catch {
       toast.error("Falha ao copiar para a área de transferência");
+    }
+  }
+
+  function exportExcel() {
+    if (rows.length === 0) {
+      toast.error("Nenhuma linha para exportar");
+      return;
+    }
+
+    try {
+      exportFilteredReportToExcel(
+        rows.map((row) => ({
+          nome: titleById.get(row.card_id) ?? row.card_id,
+          descricao:
+            checklistItemLabel(row) || selectedTaskLabel || "—",
+          isCompleted: row.is_completed,
+        }))
+      );
+      toast.success("Arquivo Excel baixado");
+    } catch {
+      toast.error("Falha ao exportar para Excel");
     }
   }
 
@@ -315,6 +344,14 @@ export function FiltersDashboard() {
               className="w-full xl:w-auto"
             >
               <Copy /> Copiar Sites
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={exportExcel}
+              disabled={rows.length === 0}
+              className="w-full xl:w-auto"
+            >
+              <FileSpreadsheet /> Exportar para Excel
             </Button>
           </div>
         </div>

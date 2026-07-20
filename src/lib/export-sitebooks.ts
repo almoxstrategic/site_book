@@ -59,3 +59,25 @@ export function exportSitebooksToExcel(
   XLSX.utils.book_append_sheet(workbook, worksheet, "Site Books");
   XLSX.writeFile(workbook, "relatorio_sitebooks.xlsx");
 }
+
+export type FilteredReportRow = {
+  nome: string;
+  descricao: string;
+  isCompleted: boolean;
+};
+
+/** Exports the currently filtered Relatórios rows (Nome, Descrição, Status). */
+export function exportFilteredReportToExcel(rows: FilteredReportRow[]) {
+  const data = rows.map((row) => ({
+    Nome: row.nome,
+    Descrição: row.descricao,
+    Status: row.isCompleted ? "Concluído" : "Pendente",
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(data, {
+    header: ["Nome", "Descrição", "Status"],
+  });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório");
+  XLSX.writeFile(workbook, "relatorio_filtrado.xlsx");
+}

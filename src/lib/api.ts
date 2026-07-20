@@ -167,7 +167,8 @@ export async function fetchChecklistItems(): Promise<CardChecklistItem[]> {
     .from("card_checklist_items")
     .select(
       `*, checklist_templates(*, checklist_categories(*)), checklist_categories(*)`
-    );
+    )
+    .order("id", { ascending: true });
   if (error) throw error;
   return (data as CardChecklistItem[]) ?? [];
 }
