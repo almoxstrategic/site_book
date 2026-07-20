@@ -43,7 +43,7 @@ export function SelectedCardProvider({ children }: { children: ReactNode }) {
 
   return (
     <SelectedCardContext.Provider value={value}>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto md:overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {children}
       </div>
       <CardDetailSheet

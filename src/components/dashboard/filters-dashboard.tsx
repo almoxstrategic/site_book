@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -57,10 +56,10 @@ export function FiltersDashboard() {
   const { setChecklist } = useBoardMutations();
   const { openCard } = useSelectedCard();
 
-  const [siteQuery, setSiteQuery] = useState("");
   const [siteId, setSiteId] = useState<string>(ALL_SITES);
   const [taskLabel, setTaskLabel] = useState<string>(ALL_TASKS);
   const [status, setStatus] = useState<FilterStatus | "all">(DEFAULT_STATUS);
+  const [siteOpen, setSiteOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
 
   const sortedCards = useMemo(
@@ -78,18 +77,9 @@ export function FiltersDashboard() {
   }, [cards]);
 
   const rows = useMemo(() => {
-    const q = siteQuery.trim().toLowerCase();
-
     return checklist
       .filter((item) => {
         if (siteId !== ALL_SITES && item.card_id !== siteId) return false;
-
-        if (q) {
-          const name = (titleById.get(item.card_id) ?? item.card_id).toLowerCase();
-          if (!name.includes(q) && !item.card_id.toLowerCase().includes(q)) {
-            return false;
-          }
-        }
 
         if (
           taskLabel !== ALL_TASKS &&
@@ -112,18 +102,21 @@ export function FiltersDashboard() {
         const labelB = checklistItemLabel(b);
         return labelA.localeCompare(labelB);
       });
-  }, [checklist, siteId, siteQuery, taskLabel, status, titleById]);
+  }, [checklist, siteId, taskLabel, status, titleById]);
+
+  const selectedSiteLabel =
+    siteId === ALL_SITES
+      ? null
+      : (titleById.get(siteId) ?? siteId);
 
   const selectedTaskLabel = taskLabel === ALL_TASKS ? null : taskLabel;
 
   const hasActiveFilters =
-    siteQuery.trim() !== "" ||
     siteId !== ALL_SITES ||
     taskLabel !== ALL_TASKS ||
     status !== DEFAULT_STATUS;
 
   function clearFilters() {
-    setSiteQuery("");
     setSiteId(ALL_SITES);
     setTaskLabel(ALL_TASKS);
     setStatus(DEFAULT_STATUS);
@@ -195,47 +188,77 @@ export function FiltersDashboard() {
   }
 
   return (
-    <div className="flex h-auto flex-col gap-4 pb-8 md:h-full md:min-h-0 md:overflow-hidden md:pb-0">
-      <div className="h-fit shrink-0 rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur sm:p-5">
+    <div className="flex flex-1 flex-col gap-4 pb-8">
+      <div className="shrink-0 rounded-xl border border-slate-200 bg-white/80 p-4 shadow-sm backdrop-blur sm:p-5">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-800">
           <Filter className="h-4 w-4 text-teal-700" />
           Filtros de relatório
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.1fr_1.2fr_0.9fr_auto] xl:items-end">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 xl:items-end">
           <div className="space-y-2">
-            <Label htmlFor="site-filter">Nome do site</Label>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Select
-                value={siteId}
-                onValueChange={(v) => {
-                  setSiteId(v);
-                  if (v !== ALL_SITES) setSiteQuery("");
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Todos os sites" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_SITES}>Todos os sites</SelectItem>
-                  {sortedCards.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.title || c.id}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Input
-                id="site-filter"
-                placeholder="Buscar por nome…"
-                value={siteQuery}
-                onChange={(e) => {
-                  setSiteQuery(e.target.value);
-                  if (e.target.value.trim()) setSiteId(ALL_SITES);
-                }}
-                className="sm:max-w-[200px]"
-              />
-            </div>
+            <Label>Nome do site</Label>
+            <Popover open={siteOpen} onOpenChange={setSiteOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={siteOpen}
+                  className="h-9 w-full justify-between font-normal"
+                >
+                  <span className="truncate">
+                    {selectedSiteLabel ?? "Todos os sites"}
+                  </span>
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                <Command>
+                  <CommandInput placeholder="Buscar site…" />
+                  <CommandList>
+                    <CommandEmpty>Nenhum site encontrado.</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        value="Todos os sites"
+                        onSelect={() => {
+                          setSiteId(ALL_SITES);
+                          setSiteOpen(false);
+                        }}
+                      >
+                        <Check
+                          className={cn(
+                            "h-4 w-4",
+                            siteId === ALL_SITES ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        Todos os sites
+                      </CommandItem>
+                      {sortedCards.map((c) => {
+                        const label = c.title || c.id;
+                        return (
+                          <CommandItem
+                            key={c.id}
+                            value={label}
+                            onSelect={() => {
+                              setSiteId(c.id);
+                              setSiteOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "h-4 w-4",
+                                siteId === c.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <span className="truncate">{label}</span>
+                          </CommandItem>
+                        );
+                      })}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="space-y-2">
@@ -327,37 +350,34 @@ export function FiltersDashboard() {
               </SelectContent>
             </Select>
           </div>
+        </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
-            <Button
-              variant="outline"
-              onClick={clearFilters}
-              disabled={!hasActiveFilters}
-              className="w-full xl:w-auto"
-            >
-              <RotateCcw /> Limpar Filtros
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={copySites}
-              disabled={rows.length === 0}
-              className="w-full xl:w-auto"
-            >
-              <Copy /> Copiar Sites
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={exportExcel}
-              disabled={rows.length === 0}
-              className="w-full xl:w-auto"
-            >
-              <FileSpreadsheet /> Exportar para Excel
-            </Button>
-          </div>
+        <div className="mt-4 flex flex-row flex-wrap items-center justify-end gap-2">
+          <Button
+            variant="outline"
+            onClick={clearFilters}
+            disabled={!hasActiveFilters}
+          >
+            <RotateCcw /> Limpar Filtros
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={copySites}
+            disabled={rows.length === 0}
+          >
+            <Copy /> Copiar Sites
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={exportExcel}
+            disabled={rows.length === 0}
+          >
+            <FileSpreadsheet /> Exportar para Excel
+          </Button>
         </div>
       </div>
 
-      <div className="flex h-auto flex-col overflow-visible rounded-xl border border-slate-200 bg-white shadow-sm md:min-h-0 md:flex-1 md:overflow-hidden">
+      <div className="flex min-h-[60vh] flex-1 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-slate-800">Resultados</p>
@@ -368,7 +388,7 @@ export function FiltersDashboard() {
           </div>
         </div>
 
-        <div className="overflow-x-auto md:min-h-0 md:flex-1 md:overflow-auto">
+        <div className="flex-1 overflow-x-auto">
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(241_245_249)]">
               <tr>
