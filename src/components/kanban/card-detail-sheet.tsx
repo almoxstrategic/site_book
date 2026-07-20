@@ -14,6 +14,7 @@ import {
   MoreHorizontal,
   Plus,
   Tag,
+  Trash2,
   User,
   X,
 } from "lucide-react";
@@ -415,7 +416,7 @@ export function CardDetailSheet({
                     {items.map((item) => (
                       <li
                         key={item.id}
-                        className="flex items-start gap-3 rounded-md px-1 py-1.5 hover:bg-slate-50"
+                        className="group flex items-start gap-3 rounded-md px-1 py-1.5 hover:bg-slate-50"
                       >
                         <Checkbox
                           id={`modal-${item.id}`}
@@ -444,7 +445,7 @@ export function CardDetailSheet({
                                 cancelEditItem();
                               }
                             }}
-                            className="h-8 text-sm"
+                            className="h-8 flex-1 text-sm"
                             placeholder="Nome do item"
                           />
                         ) : (
@@ -452,7 +453,7 @@ export function CardDetailSheet({
                             type="button"
                             onClick={() => startEditItem(item)}
                             className={cn(
-                              "flex-1 rounded-sm px-1 text-left text-sm leading-snug text-slate-700 hover:bg-white hover:ring-1 hover:ring-slate-200",
+                              "min-w-0 flex-1 rounded-sm px-1 text-left text-sm leading-snug text-slate-700 hover:bg-white hover:ring-1 hover:ring-slate-200",
                               item.is_completed && "text-slate-400 line-through"
                             )}
                             title="Clique para editar"
@@ -460,6 +461,24 @@ export function CardDetailSheet({
                             {checklistItemLabel(item)}
                           </button>
                         )}
+                        <button
+                          type="button"
+                          aria-label="Excluir item do checklist"
+                          title="Excluir item"
+                          className="mt-0.5 shrink-0 rounded p-1 text-gray-400 opacity-0 transition hover:bg-rose-50 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600/30"
+                          onClick={() => {
+                            if (
+                              !window.confirm(
+                                "Deseja realmente excluir este item?"
+                              )
+                            ) {
+                              return;
+                            }
+                            removeChecklistItem.mutate(item.id);
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </li>
                     ))}
                     {addingCategoryId &&
