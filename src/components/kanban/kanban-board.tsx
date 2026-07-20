@@ -17,7 +17,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { FileSpreadsheet, Plus } from "lucide-react";
+import { FileSpreadsheet, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,7 @@ export function KanbanBoard() {
   const [activeCard, setActiveCard] = useState<Card | null>(null);
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [newColumnOpen, setNewColumnOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [newCardOpen, setNewCardOpen] = useState<{
@@ -82,6 +83,15 @@ export function KanbanBoard() {
     }
     return map;
   }, [columns, cards]);
+
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  function matchesSearch(card: Card) {
+    if (!normalizedQuery) return true;
+    const title = (card.title || "").toLowerCase();
+    const id = card.id.toLowerCase();
+    return title.includes(normalizedQuery) || id.includes(normalizedQuery);
+  }
 
   function findContainer(id: string) {
     if (columns.some((c) => c.id === id)) return id;
@@ -170,38 +180,52 @@ export function KanbanBoard() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <div className="mb-4 flex shrink-0 flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
-        <p className="text-sm text-slate-600">
-          Arraste cards entre colunas ou reordene na mesma coluna. Clique para
-          abrir detalhes.
-        </p>
-        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full md:w-auto"
-            onClick={() => {
-              try {
-                if (cards.length === 0) {
-                  toast.error("Nenhum site para exportar");
-                  return;
+      <div className="mb-4 flex shrink-0 flex-col gap-3">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
+          <p className="text-sm text-slate-600">
+            Arraste cards entre colunas ou reordene na mesma coluna. Clique para
+            abrir detalhes.
+          </p>
+          <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full md:w-auto"
+              onClick={() => {
+                try {
+                  if (cards.length === 0) {
+                    toast.error("Nenhum site para exportar");
+                    return;
+                  }
+                  exportSitebooksToExcel(cards, checklist);
+                  toast.success("Arquivo Excel baixado");
+                } catch {
+                  toast.error("Falha ao exportar para Excel");
                 }
-                exportSitebooksToExcel(cards, checklist);
-                toast.success("Arquivo Excel baixado");
-              } catch {
-                toast.error("Falha ao exportar para Excel");
-              }
-            }}
-          >
-            <FileSpreadsheet /> Exportar para Excel
-          </Button>
-          <Button
-            onClick={() => setNewColumnOpen(true)}
-            size="sm"
-            className="w-full md:w-auto"
-          >
-            <Plus /> Nova coluna
-          </Button>
+              }}
+            >
+              <FileSpreadsheet /> Exportar para Excel
+            </Button>
+            <Button
+              onClick={() => setNewColumnOpen(true)}
+              size="sm"
+              className="w-full md:w-auto"
+            >
+              <Plus /> Nova coluna
+            </Button>
+          </div>
+        </div>
+
+        <div className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar site por nome ou ID..."
+            className="pl-9"
+            aria-label="Buscar site por nome ou ID"
+          />
         </div>
       </div>
 
@@ -215,7 +239,9 @@ export function KanbanBoard() {
       >
         <div className="scrollbar-none flex h-0 min-h-0 w-full min-w-0 flex-1 flex-nowrap items-stretch gap-4 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-2 [-webkit-overflow-scrolling:touch]">
           {columns.map((column) => {
-            const columnCards = cardsByColumn.get(column.id) ?? [];
+            const columnCards = (cardsByColumn.get(column.id) ?? []).filter(
+              matchesSearch
+            );
             const isDropTarget =
               !!activeCard &&
               overColumnId === column.id &&
