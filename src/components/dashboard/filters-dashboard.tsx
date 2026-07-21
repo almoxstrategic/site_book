@@ -37,10 +37,7 @@ import {
 } from "@/components/ui/command";
 import { useBoardData, useBoardMutations } from "@/hooks/use-board";
 import { useSelectedCard } from "@/hooks/use-selected-card";
-import {
-  checklistItemLabel,
-  DEFAULT_CHECKLIST,
-} from "@/lib/checklist-defaults";
+import { checklistItemLabel } from "@/lib/checklist-defaults";
 import {
   exportCrossFilteredReportToExcel,
   exportFilteredReportToExcel,
@@ -82,12 +79,14 @@ function TaskCombobox({
   value,
   onChange,
   mode,
+  taskOptions,
   excludeValue,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   mode: "primary" | "secondary";
+  taskOptions: string[];
   excludeValue?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -156,30 +155,28 @@ function TaskCombobox({
                   </CommandItem>
                 )}
               </CommandGroup>
-              {DEFAULT_CHECKLIST.map((group) => (
-                <CommandGroup key={group.category} heading={group.category}>
-                  {group.items
-                    .filter((item) => item !== excludeValue)
-                    .map((itemLabel) => (
-                      <CommandItem
-                        key={itemLabel}
-                        value={itemLabel}
-                        onSelect={() => {
-                          onChange(itemLabel);
-                          setOpen(false);
-                        }}
-                      >
-                        <Check
-                          className={cn(
-                            "h-4 w-4",
-                            value === itemLabel ? "opacity-100" : "opacity-0"
-                          )}
-                        />
-                        <span className="truncate">{itemLabel}</span>
-                      </CommandItem>
-                    ))}
-                </CommandGroup>
-              ))}
+              <CommandGroup heading="Tarefas">
+                {taskOptions
+                  .filter((item) => item !== excludeValue)
+                  .map((itemLabel) => (
+                    <CommandItem
+                      key={itemLabel}
+                      value={itemLabel}
+                      onSelect={() => {
+                        onChange(itemLabel);
+                        setOpen(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "h-4 w-4",
+                          value === itemLabel ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <span className="truncate">{itemLabel}</span>
+                    </CommandItem>
+                  ))}
+              </CommandGroup>
             </CommandList>
           </Command>
         </PopoverContent>
@@ -272,6 +269,20 @@ export function FiltersDashboard() {
     }
     return map;
   }, [checklist]);
+
+  const taskOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          checklist
+            .map((item) => checklistItemLabel(item).trim())
+            .filter(Boolean)
+        )
+      ).sort((a, b) =>
+        a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+      ),
+    [checklist]
+  );
 
   const task1Specific = task1 !== ALL_TASKS && task1 !== NO_TASK;
   const task2Active = task2 !== NO_TASK;
@@ -590,6 +601,7 @@ export function FiltersDashboard() {
             value={task1}
             onChange={handleTask1Change}
             mode="primary"
+            taskOptions={taskOptions}
             excludeValue={task2Active ? task2 : undefined}
           />
 
@@ -623,6 +635,7 @@ export function FiltersDashboard() {
               value={task2}
               onChange={setTask2}
               mode="secondary"
+              taskOptions={taskOptions}
               excludeValue={task1Specific ? task1 : undefined}
             />
             <div className="space-y-2">
