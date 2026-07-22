@@ -4,13 +4,38 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageSquare, Search } from "lucide-react";
+import { Check, ChevronsUpDown, MessageSquare, RotateCcw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { searchComments } from "@/lib/api";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { fetchCommentAuthors, searchComments } from "@/lib/api";
 import { useSelectedCard } from "@/hooks/use-selected-card";
 import type { CommentWithCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const ALL_AUTHORS = "__all_authors__";
+
+type SortOrder = "newest" | "oldest";
 
 function formatCommentMeta(date: string) {
   const d = new Date(date);
@@ -37,6 +62,85 @@ function highlightMatch(text: string, term: string) {
     ) : (
       part
     )
+  );
+}
+
+function AuthorCombobox({
+  value,
+  onChange,
+  authors,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  authors: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const display =
+    value === ALL_AUTHORS
+      ? "Filtrar por autor..."
+      : (authors.find((a) => a === value) ?? "Filtrar por autor...");
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-label="Filtrar por autor"
+          className={cn(
+            "h-9 w-full justify-between font-normal sm:w-[220px]",
+            value === ALL_AUTHORS && "text-slate-500"
+          )}
+        >
+          <span className="truncate">{display}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[220px] p-0">
+        <Command>
+          <CommandInput placeholder="Buscar autor…" />
+          <CommandList>
+            <CommandEmpty>Nenhum autor encontrado.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="Todos os autores"
+                onSelect={() => {
+                  onChange(ALL_AUTHORS);
+                  setOpen(false);
+                }}
+              >
+                <Check
+                  className={cn(
+                    "h-4 w-4",
+                    value === ALL_AUTHORS ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                Todos os autores
+              </CommandItem>
+              {authors.map((author) => (
+                <CommandItem
+                  key={author}
+                  value={author}
+                  onSelect={() => {
+                    onChange(author);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      value === author ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span className="truncate">{author}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -91,6 +195,8 @@ export function CommentsSearchView() {
   const { openCard } = useSelectedCard();
   const [input, setInput] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
+  const [authorFilter, setAuthorFilter] = useState(ALL_AUTHORS);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -103,19 +209,50 @@ export function CommentsSearchView() {
     setDebouncedTerm(input.trim());
   }
 
+  function clearFilters() {
+    setInput("");
+    setDebouncedTerm("");
+    setAuthorFilter(ALL_AUTHORS);
+    setSortOrder("newest");
+  }
+
+  const { data: authors = [] } = useQuery({
+    queryKey: ["comment-authors"],
+    queryFn: fetchCommentAuthors,
+  });
+
+  const selectedAuthor =
+    authorFilter === ALL_AUTHORS ? null : authorFilter;
+  const hasActiveQuery = debouncedTerm.length > 0 || !!selectedAuthor;
+  const hasActiveFilters =
+    !!input.trim() ||
+    !!debouncedTerm ||
+    authorFilter !== ALL_AUTHORS ||
+    sortOrder !== "newest";
+
   const {
     data: results = [],
     isFetching,
     isError,
     error,
   } = useQuery({
-    queryKey: ["comments-search", debouncedTerm],
-    queryFn: () => searchComments(debouncedTerm),
-    enabled: debouncedTerm.length > 0,
+    queryKey: [
+      "comments-search",
+      debouncedTerm,
+      selectedAuthor,
+      sortOrder,
+    ],
+    queryFn: () =>
+      searchComments({
+        term: debouncedTerm,
+        author: selectedAuthor,
+        sort: sortOrder,
+      }),
+    enabled: hasActiveQuery,
   });
 
-  const hasTerm = debouncedTerm.length > 0;
-  const showEmptyResults = hasTerm && !isFetching && results.length === 0;
+  const showEmptyResults =
+    hasActiveQuery && !isFetching && results.length === 0;
 
   return (
     <div className="flex flex-1 flex-col gap-4 pb-8">
@@ -153,10 +290,46 @@ export function CommentsSearchView() {
             Pesquisar
           </Button>
         </div>
-        <p className="mt-2 text-xs text-slate-500">
-          A busca é feita automaticamente após 500ms de digitação, ou ao
-          clicar em Pesquisar.
-        </p>
+
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Autor</Label>
+            <AuthorCombobox
+              value={authorFilter}
+              onChange={setAuthorFilter}
+              authors={authors}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-slate-500">Ordenação</Label>
+            <Select
+              value={sortOrder}
+              onValueChange={(v) => setSortOrder(v as SortOrder)}
+            >
+              <SelectTrigger
+                className="w-full sm:w-[220px]"
+                aria-label="Ordenar por data"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Mais recentes primeiro</SelectItem>
+                <SelectItem value="oldest">Mais antigos primeiro</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 shrink-0 gap-1.5 text-slate-600 sm:mb-0"
+            disabled={!hasActiveFilters}
+            onClick={clearFilters}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Limpar Filtros
+          </Button>
+        </div>
       </div>
 
       <div className="flex min-h-[50vh] flex-1 flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -164,8 +337,8 @@ export function CommentsSearchView() {
           <div>
             <p className="text-sm font-semibold text-slate-800">Resultados</p>
             <p className="text-xs text-slate-500">
-              {!hasTerm
-                ? "Digite um termo para buscar"
+              {!hasActiveQuery
+                ? "Digite um termo ou escolha um autor"
                 : isFetching
                   ? "Buscando…"
                   : `${results.length} comentário(s) encontrado(s)`}
@@ -181,15 +354,15 @@ export function CommentsSearchView() {
             </div>
           )}
 
-          {!hasTerm && !isError && (
+          {!hasActiveQuery && !isError && (
             <div className="flex flex-col items-center justify-center gap-2 px-4 py-16 text-center">
               <MessageSquare className="h-10 w-10 text-slate-300" />
               <p className="text-sm font-medium text-slate-600">
                 Busque em todos os comentários
               </p>
               <p className="max-w-sm text-xs text-slate-500">
-                Digite palavras-chave para encontrar conversas em qualquer site
-                do board.
+                Digite palavras-chave ou filtre por autor para encontrar
+                conversas em qualquer site do board.
               </p>
             </div>
           )}
@@ -201,7 +374,7 @@ export function CommentsSearchView() {
                 Nenhum comentário encontrado para esta pesquisa
               </p>
               <p className="max-w-sm text-xs text-slate-500">
-                Tente outro termo ou verifique a ortografia.
+                Tente outro termo, autor ou verifique a ortografia.
               </p>
             </div>
           )}

@@ -392,19 +392,46 @@ export async function fetchComments(cardId: string): Promise<Comment[]> {
   return data ?? [];
 }
 
-export async function searchComments(
-  term: string
-): Promise<CommentWithCard[]> {
-  const trimmed = term.trim();
-  if (!trimmed) return [];
+export async function searchComments(params: {
+  term?: string;
+  author?: string | null;
+  sort?: "newest" | "oldest";
+}): Promise<CommentWithCard[]> {
+  const term = params.term?.trim() ?? "";
+  const author = params.author?.trim() || null;
+  const ascending = params.sort === "oldest";
 
-  const { data, error } = await supabase
+  if (!term && !author) return [];
+
+  let query = supabase
     .from("comments")
-    .select("*, cards(id, title, state, attribute)")
-    .ilike("content", `%${trimmed}%`)
-    .order("created_at", { ascending: false });
+    .select("*, cards(id, title, state, attribute)");
+
+  if (term) {
+    query = query.ilike("content", `%${term}%`);
+  }
+  if (author) {
+    query = query.eq("author", author);
+  }
+
+  const { data, error } = await query.order("created_at", { ascending });
   if (error) throw error;
   return (data as CommentWithCard[]) ?? [];
+}
+
+export async function fetchCommentAuthors(): Promise<string[]> {
+  const { data, error } = await supabase.from("comments").select("author");
+  if (error) throw error;
+
+  const authors = new Set<string>();
+  for (const row of data ?? []) {
+    const name = row.author?.trim();
+    if (name) authors.add(name);
+  }
+
+  return Array.from(authors).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" })
+  );
 }
 
 export async function createComment(

@@ -80,15 +80,15 @@ export type FilteredReportRow = {
 export function exportFilteredReportToExcel(rows: FilteredReportRow[]) {
   const data = rows.map((row) => ({
     "Nome do Site": row.nome,
-    Posição: row.posicao,
     UF: row.uf,
+    Posição: row.posicao,
     ATRIBUTOS: row.atributos,
     Tarefa: row.descricao,
     Status: row.isCompleted ? "Feito" : "Pendente",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data, {
-    header: ["Nome do Site", "Posição", "UF", "ATRIBUTOS", "Tarefa", "Status"],
+    header: ["Nome do Site", "UF", "Posição", "ATRIBUTOS", "Tarefa", "Status"],
   });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório");
@@ -115,22 +115,22 @@ export function exportCrossFilteredReportToExcel(
   const header = hasTask2
     ? [
         "Nome do Site",
-        "Posição",
         "UF",
+        "Posição",
         "ATRIBUTOS",
         "Tarefa 1",
         "Status 1",
         "Tarefa 2",
         "Status 2",
       ]
-    : ["Nome do Site", "Posição", "UF", "ATRIBUTOS", "Tarefa", "Status"];
+    : ["Nome do Site", "UF", "Posição", "ATRIBUTOS", "Tarefa", "Status"];
 
   const data = rows.map((row) => {
     if (hasTask2) {
       return {
         "Nome do Site": row.siteName,
-        Posição: row.columnName,
         UF: row.uf,
+        Posição: row.columnName,
         ATRIBUTOS: row.atributos,
         "Tarefa 1": row.task1Label,
         "Status 1": row.task1Completed ? "Feito" : "Pendente",
@@ -146,8 +146,8 @@ export function exportCrossFilteredReportToExcel(
 
     return {
       "Nome do Site": row.siteName,
-      Posição: row.columnName,
       UF: row.uf,
+      Posição: row.columnName,
       ATRIBUTOS: row.atributos,
       Tarefa: row.task1Label,
       Status: row.task1Completed ? "Feito" : "Pendente",

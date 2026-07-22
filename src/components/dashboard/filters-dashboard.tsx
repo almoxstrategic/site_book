@@ -672,13 +672,13 @@ export function FiltersDashboard() {
           </div>
 
           <div className="space-y-2">
-            <Label>Estado</Label>
+            <Label>UF</Label>
             <Select value={stateFilter} onValueChange={setStateFilter}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Todos os estados" />
+                <SelectValue placeholder="Todas as UFs" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL_STATES}>Todos os estados</SelectItem>
+                <SelectItem value={ALL_STATES}>Todas as UFs</SelectItem>
                 {stateOptions.map((uf) => (
                   <SelectItem key={uf} value={uf}>
                     {uf}
@@ -850,6 +850,7 @@ export function FiltersDashboard() {
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(241_245_249)]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Nome do Site</th>
+                  <th className="px-4 py-3 font-medium">UF</th>
                   <th className="px-4 py-3 font-medium">Posição</th>
                   <th className="px-4 py-3 font-medium">Atributos</th>
                   <th className="px-4 py-3 font-medium">Tarefa 1</th>
@@ -862,7 +863,7 @@ export function FiltersDashboard() {
                 {crossRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Nenhum site atende às duas condições ao mesmo tempo.
@@ -883,6 +884,7 @@ export function FiltersDashboard() {
                         {row.siteName}
                       </button>
                     </td>
+                    <td className="px-4 py-3 text-slate-600">{row.state}</td>
                     <td className="px-4 py-3 text-slate-600">{row.columnName}</td>
                     <td className="px-4 py-3 text-slate-600">{row.attribute}</td>
                     <td className="px-4 py-3 text-slate-600">{row.task1Label}</td>
@@ -920,6 +922,7 @@ export function FiltersDashboard() {
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(241_245_249)]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Nome do Site</th>
+                  <th className="px-4 py-3 font-medium">UF</th>
                   <th className="px-4 py-3 font-medium">Posição</th>
                   <th className="px-4 py-3 font-medium">Atributos</th>
                   <th className="px-4 py-3 font-medium">Tarefa</th>
@@ -930,7 +933,7 @@ export function FiltersDashboard() {
                 {checklistRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Nenhum resultado para a combinação de filtros atual.
@@ -951,6 +954,7 @@ export function FiltersDashboard() {
                         {row.siteName}
                       </button>
                     </td>
+                    <td className="px-4 py-3 text-slate-600">{row.state}</td>
                     <td className="px-4 py-3 text-slate-600">{row.columnName}</td>
                     <td className="px-4 py-3 text-slate-600">{row.attribute}</td>
                     <td className="px-4 py-3 text-slate-600">{row.taskLabel}</td>
