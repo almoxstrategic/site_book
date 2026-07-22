@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/select";
 import { useBoardMutations, useComments } from "@/hooks/use-board";
 import { checklistItemLabel } from "@/lib/checklist-defaults";
+import { ChecklistSearchInput } from "@/components/checklist/checklist-search-input";
 import { SITE_ATTRIBUTES, type Card, type CardChecklistItem, type Column } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -126,6 +127,7 @@ export function CardDetailSheet({
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [draftLabel, setDraftLabel] = useState("");
   const [addingCategoryId, setAddingCategoryId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const itemInputRef = useRef<HTMLInputElement>(null);
 
@@ -138,6 +140,7 @@ export function CardDetailSheet({
       setEditingCommentId(null);
       setEditingItemId(null);
       setAddingCategoryId(null);
+      setSearchQuery("");
     }
   }, [card?.id, card?.title, card?.description, open]);
 
@@ -169,6 +172,54 @@ export function CardDetailSheet({
     }
     return map;
   }, [checklist]);
+
+  const filteredGrouped = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const entries = [...grouped.entries()];
+
+    if (!q) {
+      return entries.map(([category, data]) => ({
+        category,
+        categoryId: data.categoryId,
+        allItems: data.items,
+        items: data.items,
+      }));
+    }
+
+    const result: {
+      category: string;
+      categoryId: string | null;
+      allItems: CardChecklistItem[];
+      items: CardChecklistItem[];
+    }[] = [];
+
+    for (const [category, data] of entries) {
+      const categoryMatches = category.toLowerCase().includes(q);
+      if (categoryMatches) {
+        result.push({
+          category,
+          categoryId: data.categoryId,
+          allItems: data.items,
+          items: data.items,
+        });
+        continue;
+      }
+
+      const matchedItems = data.items.filter((item) =>
+        checklistItemLabel(item).toLowerCase().includes(q)
+      );
+      if (matchedItems.length > 0) {
+        result.push({
+          category,
+          categoryId: data.categoryId,
+          allItems: data.items,
+          items: matchedItems,
+        });
+      }
+    }
+
+    return result;
+  }, [grouped, searchQuery]);
 
   function saveTitle() {
     if (!card) return;
@@ -389,10 +440,28 @@ export function CardDetailSheet({
               </div>
             )}
 
-            {[...grouped.entries()].map(([category, { categoryId, items }]) => {
-              const done = items.filter((i) => i.is_completed).length;
+            {grouped.size > 0 && (
+              <ChecklistSearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+              />
+            )}
+
+            {grouped.size > 0 &&
+              filteredGrouped.length === 0 &&
+              searchQuery.trim() && (
+                <p className="mb-6 py-4 text-center text-sm text-slate-500">
+                  Nenhum item corresponde à busca.
+                </p>
+              )}
+
+            {filteredGrouped.map(({ category, categoryId, allItems, items }) => {
+              const done = allItems.filter((i) => i.is_completed).length;
               const pct =
-                items.length > 0 ? Math.round((done / items.length) * 100) : 0;
+                allItems.length > 0
+                  ? Math.round((done / allItems.length) * 100)
+                  : 0;
+              const isFiltering = searchQuery.trim().length > 0;
               return (
                 <section key={category} className="mb-8">
                   <div className="mb-2 flex items-center justify-between gap-3">
@@ -413,7 +482,7 @@ export function CardDetailSheet({
                         ) {
                           return;
                         }
-                        for (const item of items) {
+                        for (const item of allItems) {
                           removeChecklistItem.mutate(item.id);
                         }
                       }}
@@ -507,7 +576,8 @@ export function CardDetailSheet({
                       </li>
                     ))}
                     {addingCategoryId &&
-                      categoryId === addingCategoryId && (
+                      categoryId === addingCategoryId &&
+                      !isFiltering && (
                         <li className="flex items-start gap-3 rounded-md px-1 py-1.5">
                           <span className="mt-0.5 h-4 w-4" />
                           <Input
@@ -532,6 +602,7 @@ export function CardDetailSheet({
                       )}
                   </ul>
 
+                  {!isFiltering && (
                   <Button
                     variant="secondary"
                     size="sm"
@@ -545,6 +616,7 @@ export function CardDetailSheet({
                   >
                     Adicionar um item
                   </Button>
+                  )}
                 </section>
               );
             })}

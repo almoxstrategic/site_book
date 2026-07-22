@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/popover";
 import type { TeamChecklistItem, TeamChecklistSection } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ChecklistSearchInput } from "@/components/checklist/checklist-search-input";
 
 export type ChecklistEditorHandlers = {
   onAddTopic: (title: string) => void;
@@ -154,6 +155,7 @@ export function ChecklistEditor({
 }: Props) {
   const [draftMode, setDraftMode] = useState<DraftMode>(null);
   const [draftText, setDraftText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -195,6 +197,77 @@ export function ChecklistEditor({
     return map;
   }, [items]);
 
+  const filteredTopics = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+
+    type FilteredSub = {
+      sub: TeamChecklistSection;
+      items: TeamChecklistItem[];
+    };
+    type FilteredTopic = {
+      topic: TeamChecklistSection;
+      directItems: TeamChecklistItem[];
+      subtopics: FilteredSub[];
+    };
+
+    if (!q) {
+      return topics.map((topic) => ({
+        topic,
+        directItems: itemsBySection.get(topic.id) ?? [],
+        subtopics: (subtopicsByTopic.get(topic.id) ?? []).map((sub) => ({
+          sub,
+          items: itemsBySection.get(sub.id) ?? [],
+        })),
+      })) satisfies FilteredTopic[];
+    }
+
+    const result: FilteredTopic[] = [];
+
+    for (const topic of topics) {
+      const topicMatches = topic.title.toLowerCase().includes(q);
+      const allSubs = subtopicsByTopic.get(topic.id) ?? [];
+      const allDirect = itemsBySection.get(topic.id) ?? [];
+
+      if (topicMatches) {
+        result.push({
+          topic,
+          directItems: allDirect,
+          subtopics: allSubs.map((sub) => ({
+            sub,
+            items: itemsBySection.get(sub.id) ?? [],
+          })),
+        });
+        continue;
+      }
+
+      const directItems = allDirect.filter((i) =>
+        (i.label || "").toLowerCase().includes(q)
+      );
+
+      const subtopics: FilteredSub[] = [];
+      for (const sub of allSubs) {
+        const subMatches = sub.title.toLowerCase().includes(q);
+        const allItems = itemsBySection.get(sub.id) ?? [];
+        if (subMatches) {
+          subtopics.push({ sub, items: allItems });
+          continue;
+        }
+        const matchedItems = allItems.filter((i) =>
+          (i.label || "").toLowerCase().includes(q)
+        );
+        if (matchedItems.length > 0) {
+          subtopics.push({ sub, items: matchedItems });
+        }
+      }
+
+      if (directItems.length > 0 || subtopics.length > 0) {
+        result.push({ topic, directItems, subtopics });
+      }
+    }
+
+    return result;
+  }, [topics, subtopicsByTopic, itemsBySection, searchQuery]);
+
   function cancelDraft() {
     setDraftMode(null);
     setDraftText("");
@@ -233,8 +306,7 @@ export function ChecklistEditor({
     return { done, total, pct };
   }
 
-  function renderItems(sectionId: string) {
-    const sectionItems = itemsBySection.get(sectionId) ?? [];
+  function renderItems(sectionId: string, sectionItems: TeamChecklistItem[]) {
     return (
       <ul className="space-y-1">
         {sectionItems.map((item) => (
@@ -378,6 +450,10 @@ export function ChecklistEditor({
 
   return (
     <div className="space-y-6">
+      {topics.length > 0 && (
+        <ChecklistSearchInput value={searchQuery} onChange={setSearchQuery} />
+      )}
+
       {topics.length === 0 && draftMode?.kind !== "topic" && (
         <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
           <p className="text-sm text-slate-500">
@@ -410,13 +486,20 @@ export function ChecklistEditor({
         </div>
       )}
 
-      {topics.map((topic) => {
-        const subtopics = subtopicsByTopic.get(topic.id) ?? [];
-        const progressIds = [
-          topic.id,
-          ...subtopics.map((s) => s.id),
-        ];
+      {topics.length > 0 &&
+        filteredTopics.length === 0 &&
+        searchQuery.trim() && (
+          <p className="py-6 text-center text-sm text-slate-500">
+            Nenhum item corresponde à busca.
+          </p>
+        )}
+
+      {filteredTopics.map(({ topic, directItems, subtopics }) => {
+        const allSubIds =
+          subtopicsByTopic.get(topic.id)?.map((s) => s.id) ?? [];
+        const progressIds = [topic.id, ...allSubIds];
         const { pct } = sectionProgress(progressIds);
+        const isFiltering = searchQuery.trim().length > 0;
 
         return (
           <section key={topic.id} className="mb-2">
@@ -461,25 +544,30 @@ export function ChecklistEditor({
             </div>
 
             {/* Tasks directly under topic */}
-            <div className="mb-3">{renderItems(topic.id)}</div>
-            {draftMode?.kind === "item" &&
-            draftMode.sectionId === topic.id ? null : (
-              <AddItemActions
-                className="mb-4"
-                disabled={pending}
-                onAddOne={() => {
-                  setDraftMode({ kind: "item", sectionId: topic.id });
-                  setDraftText("");
-                }}
-                onBulkAdd={(labels) =>
-                  handlers.onBulkAddItems(topic.id, labels)
-                }
-              />
-            )}
+            <div className="mb-3">
+              {renderItems(topic.id, directItems)}
+            </div>
+            {!isFiltering &&
+              !(
+                draftMode?.kind === "item" &&
+                draftMode.sectionId === topic.id
+              ) && (
+                <AddItemActions
+                  className="mb-4"
+                  disabled={pending}
+                  onAddOne={() => {
+                    setDraftMode({ kind: "item", sectionId: topic.id });
+                    setDraftText("");
+                  }}
+                  onBulkAdd={(labels) =>
+                    handlers.onBulkAddItems(topic.id, labels)
+                  }
+                />
+              )}
 
             {/* Subtopics */}
             <div className="ml-1 space-y-4 border-l border-slate-200 pl-4">
-              {subtopics.map((sub) => {
+              {subtopics.map(({ sub, items: subItems }) => {
                 const subProgress = sectionProgress([sub.id]);
                 return (
                   <div key={sub.id}>
@@ -513,28 +601,30 @@ export function ChecklistEditor({
                         </button>
                       </div>
                     </div>
-                    {renderItems(sub.id)}
-                    {!(
-                      draftMode?.kind === "item" &&
-                      draftMode.sectionId === sub.id
-                    ) && (
-                      <AddItemActions
-                        className="mt-2"
-                        disabled={pending}
-                        onAddOne={() => {
-                          setDraftMode({ kind: "item", sectionId: sub.id });
-                          setDraftText("");
-                        }}
-                        onBulkAdd={(labels) =>
-                          handlers.onBulkAddItems(sub.id, labels)
-                        }
-                      />
-                    )}
+                    {renderItems(sub.id, subItems)}
+                    {!isFiltering &&
+                      !(
+                        draftMode?.kind === "item" &&
+                        draftMode.sectionId === sub.id
+                      ) && (
+                        <AddItemActions
+                          className="mt-2"
+                          disabled={pending}
+                          onAddOne={() => {
+                            setDraftMode({ kind: "item", sectionId: sub.id });
+                            setDraftText("");
+                          }}
+                          onBulkAdd={(labels) =>
+                            handlers.onBulkAddItems(sub.id, labels)
+                          }
+                        />
+                      )}
                   </div>
                 );
               })}
 
-              {draftMode?.kind === "subtopic" &&
+              {!isFiltering &&
+                draftMode?.kind === "subtopic" &&
                 draftMode.topicId === topic.id && (
                   <Input
                     ref={inputRef}
@@ -556,25 +646,26 @@ export function ChecklistEditor({
                   />
                 )}
 
-              {!(
-                draftMode?.kind === "subtopic" &&
-                draftMode.topicId === topic.id
-              ) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 gap-1.5 px-2 text-xs text-teal-800 hover:bg-teal-50"
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    setDraftMode({ kind: "subtopic", topicId: topic.id });
-                    setDraftText("");
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Adicionar subtópico
-                </Button>
-              )}
+              {!isFiltering &&
+                !(
+                  draftMode?.kind === "subtopic" &&
+                  draftMode.topicId === topic.id
+                ) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 px-2 text-xs text-teal-800 hover:bg-teal-50"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      setDraftMode({ kind: "subtopic", topicId: topic.id });
+                      setDraftText("");
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Adicionar subtópico
+                  </Button>
+                )}
             </div>
           </section>
         );
@@ -601,7 +692,9 @@ export function ChecklistEditor({
         />
       )}
 
-      {draftMode?.kind !== "topic" && topics.length > 0 && (
+      {draftMode?.kind !== "topic" &&
+        topics.length > 0 &&
+        !searchQuery.trim() && (
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"

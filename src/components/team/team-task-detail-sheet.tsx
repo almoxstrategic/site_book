@@ -295,6 +295,7 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
               <p className="text-sm text-slate-500">Carregando checklist…</p>
             ) : (
               <ChecklistEditor
+                key={task.id}
                 sections={checklist?.sections ?? []}
                 items={checklist?.items ?? []}
                 pending={pending}
