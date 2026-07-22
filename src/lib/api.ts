@@ -7,6 +7,7 @@ import {
   type ChecklistTemplate,
   type Column,
   type Comment,
+  type CommentWithCard,
 } from "@/lib/types";
 
 export async function fetchColumns(): Promise<Column[]> {
@@ -389,6 +390,21 @@ export async function fetchComments(cardId: string): Promise<Comment[]> {
     .order("created_at", { ascending: true });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function searchComments(
+  term: string
+): Promise<CommentWithCard[]> {
+  const trimmed = term.trim();
+  if (!trimmed) return [];
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*, cards(id, title, state, attribute)")
+    .ilike("content", `%${trimmed}%`)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as CommentWithCard[]) ?? [];
 }
 
 export async function createComment(

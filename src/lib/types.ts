@@ -72,6 +72,10 @@ export type Comment = {
   updated_at: string;
 };
 
+export type CommentWithCard = Comment & {
+  cards: Pick<Card, "id" | "title" | "state" | "attribute"> | null;
+};
+
 export type CardWithProgress = Card & {
   completed: number;
   total: number;

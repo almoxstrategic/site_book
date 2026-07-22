@@ -1,9 +1,10 @@
 "use client";
 
-import { BookOpen, Columns3, LayoutDashboard } from "lucide-react";
+import { BookOpen, Columns3, LayoutDashboard, MessageSquare } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { FiltersDashboard } from "@/components/dashboard/filters-dashboard";
+import { CommentsSearchView } from "@/components/comments/comments-search-view";
 import { SitesTotalCard } from "@/components/dashboard/sites-total-card";
 import { SelectedCardProvider } from "@/hooks/use-selected-card";
 
@@ -45,6 +46,13 @@ export default function Home() {
               <LayoutDashboard className="h-4 w-4" />
               Relatórios
             </TabsTrigger>
+            <TabsTrigger
+              value="comments-search"
+              className="flex-1 gap-2 sm:flex-none"
+            >
+              <MessageSquare className="h-4 w-4" />
+              Pesquisar Comentários
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent
@@ -59,6 +67,13 @@ export default function Home() {
             className="mt-2 flex min-h-0 min-w-0 flex-1 flex-col outline-none data-[state=inactive]:hidden"
           >
             <FiltersDashboard />
+          </TabsContent>
+
+          <TabsContent
+            value="comments-search"
+            className="mt-2 flex min-h-0 min-w-0 flex-1 flex-col outline-none data-[state=inactive]:hidden"
+          >
+            <CommentsSearchView />
           </TabsContent>
         </Tabs>
       </SelectedCardProvider>
