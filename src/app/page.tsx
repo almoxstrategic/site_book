@@ -1,10 +1,17 @@
 "use client";
 
-import { BookOpen, Columns3, LayoutDashboard, MessageSquare } from "lucide-react";
+import {
+  BookOpen,
+  Columns3,
+  LayoutDashboard,
+  MessageSquare,
+  Users,
+} from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { FiltersDashboard } from "@/components/dashboard/filters-dashboard";
 import { CommentsSearchView } from "@/components/comments/comments-search-view";
+import { TeamKanbanView } from "@/components/team/team-kanban-view";
 import { SitesTotalCard } from "@/components/dashboard/sites-total-card";
 import { SelectedCardProvider } from "@/hooks/use-selected-card";
 
@@ -37,21 +44,22 @@ export default function Home() {
           defaultValue="kanban"
           className="animate-fade-up-delay flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden"
         >
-          <TabsList className="flex h-auto w-full shrink-0 flex-wrap justify-start gap-1 sm:w-auto">
-            <TabsTrigger value="kanban" className="flex-1 gap-2 sm:flex-none">
+          <TabsList className="flex h-auto w-full shrink-0 flex-wrap items-center justify-start gap-1">
+            <TabsTrigger value="kanban" className="gap-2">
               <Columns3 className="h-4 w-4" />
-              Kanban
+              Kanban de Sitebook
             </TabsTrigger>
-            <TabsTrigger value="dashboard" className="flex-1 gap-2 sm:flex-none">
+            <TabsTrigger value="dashboard" className="gap-2">
               <LayoutDashboard className="h-4 w-4" />
               Relatórios
             </TabsTrigger>
-            <TabsTrigger
-              value="comments-search"
-              className="flex-1 gap-2 sm:flex-none"
-            >
+            <TabsTrigger value="comments-search" className="gap-2">
               <MessageSquare className="h-4 w-4" />
               Pesquisar Comentários
+            </TabsTrigger>
+            <TabsTrigger value="team-kanban" className="ml-auto gap-2">
+              <Users className="h-4 w-4" />
+              Kanban de Equipe
             </TabsTrigger>
           </TabsList>
 
@@ -74,6 +82,13 @@ export default function Home() {
             className="mt-2 flex min-h-0 min-w-0 flex-1 flex-col outline-none data-[state=inactive]:hidden"
           >
             <CommentsSearchView />
+          </TabsContent>
+
+          <TabsContent
+            value="team-kanban"
+            className="mt-2 flex h-[calc(100dvh-11rem)] min-h-[28rem] min-w-0 flex-col overflow-hidden outline-none data-[state=inactive]:hidden"
+          >
+            <TeamKanbanView />
           </TabsContent>
         </Tabs>
       </SelectedCardProvider>

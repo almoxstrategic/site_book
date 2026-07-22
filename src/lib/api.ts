@@ -8,6 +8,10 @@ import {
   type Column,
   type Comment,
   type CommentWithCard,
+  type TeamTask,
+  type TeamTaskStatus,
+  type TeamChecklistSection,
+  type TeamChecklistItem,
 } from "@/lib/types";
 
 export async function fetchColumns(): Promise<Column[]> {
@@ -465,4 +469,290 @@ export async function updateComment(
 export async function deleteComment(id: string): Promise<void> {
   const { error } = await supabase.from("comments").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function fetchTeamTasks(): Promise<TeamTask[]> {
+  const { data, error } = await supabase
+    .from("team_tasks")
+    .select("*")
+    .order("position", { ascending: true });
+  if (error) throw error;
+  return (data as TeamTask[]) ?? [];
+}
+
+export async function createTeamTask(params: {
+  title: string;
+  description?: string;
+  status?: TeamTaskStatus;
+}): Promise<TeamTask> {
+  const status = params.status ?? "todo";
+  const { data: max } = await supabase
+    .from("team_tasks")
+    .select("position")
+    .eq("status", status)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("team_tasks")
+    .insert({
+      title: params.title.trim(),
+      description: params.description?.trim() ?? "",
+      status,
+      position: (max?.position ?? -1) + 1,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamTask;
+}
+
+export async function updateTeamTask(
+  id: string,
+  updates: Partial<
+    Pick<TeamTask, "title" | "description" | "status" | "position">
+  >
+): Promise<TeamTask> {
+  const { data, error } = await supabase
+    .from("team_tasks")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamTask;
+}
+
+export async function deleteTeamTask(id: string): Promise<void> {
+  const { error } = await supabase.from("team_tasks").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function moveTeamTask(params: {
+  taskId: string;
+  toStatus: TeamTaskStatus;
+  toPosition: number;
+  fromStatus: TeamTaskStatus;
+}): Promise<void> {
+  const { taskId, toStatus, toPosition, fromStatus } = params;
+
+  const { data: tasks, error: fetchError } = await supabase
+    .from("team_tasks")
+    .select("*")
+    .in("status", Array.from(new Set([fromStatus, toStatus])));
+  if (fetchError) throw fetchError;
+
+  const moving = (tasks as TeamTask[] | null)?.find((t) => t.id === taskId);
+  if (!moving) throw new Error("Tarefa não encontrada");
+
+  const targetTasks = ((tasks as TeamTask[]) ?? [])
+    .filter((t) => t.status === toStatus && t.id !== taskId)
+    .sort((a, b) => a.position - b.position);
+
+  targetTasks.splice(toPosition, 0, { ...moving, status: toStatus });
+
+  const updates = targetTasks.map((t, index) => ({
+    id: t.id,
+    status: toStatus,
+    position: index,
+  }));
+
+  if (fromStatus !== toStatus) {
+    const sourceTasks = ((tasks as TeamTask[]) ?? [])
+      .filter((t) => t.status === fromStatus && t.id !== taskId)
+      .sort((a, b) => a.position - b.position)
+      .map((t, index) => ({
+        id: t.id,
+        status: fromStatus,
+        position: index,
+      }));
+    updates.push(...sourceTasks);
+  }
+
+  for (const u of updates) {
+    const { error } = await supabase
+      .from("team_tasks")
+      .update({ status: u.status, position: u.position })
+      .eq("id", u.id);
+    if (error) throw error;
+  }
+}
+
+export async function fetchTeamChecklistProgress(): Promise<
+  Record<string, { completed: number; total: number }>
+> {
+  const { data, error } = await supabase
+    .from("team_task_checklist_items")
+    .select("team_task_id, is_completed");
+  if (error) throw error;
+
+  const progress: Record<string, { completed: number; total: number }> = {};
+  for (const row of data ?? []) {
+    const key = row.team_task_id as string;
+    const current = progress[key] ?? { completed: 0, total: 0 };
+    current.total += 1;
+    if (row.is_completed) current.completed += 1;
+    progress[key] = current;
+  }
+  return progress;
+}
+
+export async function fetchTeamTaskChecklist(teamTaskId: string): Promise<{
+  sections: TeamChecklistSection[];
+  items: TeamChecklistItem[];
+}> {
+  const [sectionsRes, itemsRes] = await Promise.all([
+    supabase
+      .from("team_task_checklist_sections")
+      .select("*")
+      .eq("team_task_id", teamTaskId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("team_task_checklist_items")
+      .select("*")
+      .eq("team_task_id", teamTaskId)
+      .order("sort_order", { ascending: true }),
+  ]);
+
+  if (sectionsRes.error) throw sectionsRes.error;
+  if (itemsRes.error) throw itemsRes.error;
+
+  return {
+    sections: (sectionsRes.data as TeamChecklistSection[]) ?? [],
+    items: (itemsRes.data as TeamChecklistItem[]) ?? [],
+  };
+}
+
+export async function createTeamChecklistSection(params: {
+  teamTaskId: string;
+  title: string;
+  parentId?: string | null;
+}): Promise<TeamChecklistSection> {
+  const parentId = params.parentId ?? null;
+  let query = supabase
+    .from("team_task_checklist_sections")
+    .select("sort_order")
+    .eq("team_task_id", params.teamTaskId)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  query = parentId
+    ? query.eq("parent_id", parentId)
+    : query.is("parent_id", null);
+
+  const { data: max } = await query.maybeSingle();
+
+  const { data, error } = await supabase
+    .from("team_task_checklist_sections")
+    .insert({
+      team_task_id: params.teamTaskId,
+      parent_id: parentId,
+      title: params.title.trim() || (parentId ? "Novo subtópico" : "Novo tópico"),
+      sort_order: (max?.sort_order ?? -1) + 1,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamChecklistSection;
+}
+
+export async function updateTeamChecklistSection(
+  id: string,
+  updates: Partial<Pick<TeamChecklistSection, "title" | "sort_order">>
+): Promise<TeamChecklistSection> {
+  const { data, error } = await supabase
+    .from("team_task_checklist_sections")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamChecklistSection;
+}
+
+export async function deleteTeamChecklistSection(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("team_task_checklist_sections")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function createTeamChecklistItem(params: {
+  teamTaskId: string;
+  sectionId: string;
+  label?: string;
+}): Promise<TeamChecklistItem> {
+  const { data: max } = await supabase
+    .from("team_task_checklist_items")
+    .select("sort_order")
+    .eq("section_id", params.sectionId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data, error } = await supabase
+    .from("team_task_checklist_items")
+    .insert({
+      team_task_id: params.teamTaskId,
+      section_id: params.sectionId,
+      label: params.label?.trim() ?? "",
+      is_completed: false,
+      sort_order: (max?.sort_order ?? -1) + 1,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamChecklistItem;
+}
+
+export async function toggleTeamChecklistItem(
+  id: string,
+  isCompleted: boolean
+): Promise<TeamChecklistItem> {
+  const { data, error } = await supabase
+    .from("team_task_checklist_items")
+    .update({ is_completed: isCompleted })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamChecklistItem;
+}
+
+export async function updateTeamChecklistItemLabel(
+  id: string,
+  label: string
+): Promise<TeamChecklistItem> {
+  const { data, error } = await supabase
+    .from("team_task_checklist_items")
+    .update({ label: label.trim() })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamChecklistItem;
+}
+
+export async function deleteTeamChecklistItem(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("team_task_checklist_items")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateTeamTaskDetails(
+  id: string,
+  updates: Partial<Pick<TeamTask, "title" | "description">>
+): Promise<TeamTask> {
+  const { data, error } = await supabase
+    .from("team_tasks")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as TeamTask;
 }

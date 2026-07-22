@@ -82,3 +82,42 @@ export type CardWithProgress = Card & {
 };
 
 export type FilterStatus = "completed" | "pending";
+
+export const TEAM_TASK_STATUSES = ["todo", "in_progress", "done"] as const;
+
+export type TeamTaskStatus = (typeof TEAM_TASK_STATUSES)[number];
+
+export const TEAM_TASK_STATUS_LABELS: Record<TeamTaskStatus, string> = {
+  todo: "A Fazer",
+  in_progress: "Em Andamento",
+  done: "Concluído",
+};
+
+export type TeamTask = {
+  id: string;
+  title: string;
+  description: string;
+  status: TeamTaskStatus;
+  position: number;
+  created_at: string;
+};
+
+/** Topic (parent_id null) or subtopic (parent_id set) within a team task checklist. */
+export type TeamChecklistSection = {
+  id: string;
+  team_task_id: string;
+  parent_id: string | null;
+  title: string;
+  sort_order: number;
+  created_at: string;
+};
+
+export type TeamChecklistItem = {
+  id: string;
+  team_task_id: string;
+  section_id: string;
+  label: string;
+  is_completed: boolean;
+  sort_order: number;
+  created_at: string;
+};

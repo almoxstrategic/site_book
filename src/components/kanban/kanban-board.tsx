@@ -373,45 +373,9 @@ export function KanbanBoard() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <div className="mb-4 flex shrink-0 flex-col gap-3">
-        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
-          <p className="text-sm text-slate-600">
-            Arraste o cabeçalho da coluna para reordenar. Arraste cards entre
-            colunas ou clique para abrir detalhes.
-          </p>
-          <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full md:w-auto"
-              onClick={() => {
-                try {
-                  const filteredCards = cards.filter(matchesFilters);
-                  if (filteredCards.length === 0) {
-                    toast.error("Nenhum site para exportar");
-                    return;
-                  }
-                  exportSitebooksToExcel(filteredCards, checklist);
-                  toast.success("Arquivo Excel baixado");
-                } catch {
-                  toast.error("Falha ao exportar para Excel");
-                }
-              }}
-            >
-              <FileSpreadsheet /> Exportar para Excel
-            </Button>
-            <Button
-              onClick={() => setNewColumnOpen(true)}
-              size="sm"
-              className="w-full md:w-auto"
-            >
-              <Plus /> Nova coluna
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-          <div className="relative w-full max-w-md min-w-[200px] flex-1">
+      <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative w-full min-w-[180px] max-w-md flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               type="search"
@@ -454,6 +418,36 @@ export function KanbanBoard() {
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Limpar Filtros
+          </Button>
+        </div>
+
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:flex-row sm:justify-end lg:w-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full sm:w-auto"
+            onClick={() => {
+              try {
+                const filteredCards = cards.filter(matchesFilters);
+                if (filteredCards.length === 0) {
+                  toast.error("Nenhum site para exportar");
+                  return;
+                }
+                exportSitebooksToExcel(filteredCards, checklist);
+                toast.success("Arquivo Excel baixado");
+              } catch {
+                toast.error("Falha ao exportar para Excel");
+              }
+            }}
+          >
+            <FileSpreadsheet /> Exportar para Excel
+          </Button>
+          <Button
+            onClick={() => setNewColumnOpen(true)}
+            size="sm"
+            className="w-full sm:w-auto"
+          >
+            <Plus /> Nova coluna
           </Button>
         </div>
       </div>
