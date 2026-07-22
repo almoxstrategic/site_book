@@ -211,8 +211,15 @@ export function useBoardMutations() {
   });
 
   const addCard = useMutation({
-    mutationFn: ({ id, columnId }: { id: string; columnId: string }) =>
-      createCard(id, columnId),
+    mutationFn: ({
+      id,
+      columnId,
+      attribute,
+    }: {
+      id: string;
+      columnId: string;
+      attribute: string;
+    }) => createCard(id, columnId, attribute),
     onSuccess: () => {
       invalidateBoard();
       toast.success("Site Book criado");
@@ -238,14 +245,23 @@ export function useBoardMutations() {
       title?: string;
       description?: string;
       column_id?: string;
+      attribute?: string;
+      state?: string;
     }) => updateCard(id, updates),
     onMutate: async ({ id, ...updates }) => {
       await qc.cancelQueries({ queryKey: queryKeys.cards });
       const previous = qc.getQueryData(queryKeys.cards);
+      const optimistic =
+        updates.title !== undefined && updates.state === undefined
+          ? {
+              ...updates,
+              state: updates.title.trim().substring(0, 2).toUpperCase(),
+            }
+          : updates;
       qc.setQueryData(
         queryKeys.cards,
         (old: Awaited<ReturnType<typeof fetchCards>> | undefined) =>
-          old?.map((c) => (c.id === id ? { ...c, ...updates } : c))
+          old?.map((c) => (c.id === id ? { ...c, ...optimistic } : c))
       );
       return { previous };
     },

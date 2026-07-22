@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { useBoardMutations, useComments } from "@/hooks/use-board";
 import { checklistItemLabel } from "@/lib/checklist-defaults";
-import type { Card, CardChecklistItem, Column } from "@/lib/types";
+import { SITE_ATTRIBUTES, type Card, type CardChecklistItem, type Column } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -285,35 +285,60 @@ export function CardDetailSheet({
           <div className="min-h-0 overflow-y-auto px-6 py-5">
             <div className="mb-3 flex items-start gap-3">
               <span className="mt-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-slate-300" />
-              {editingTitle ? (
-                <textarea
-                  ref={titleRef}
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onBlur={saveTitle}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      saveTitle();
-                    }
-                    if (e.key === "Escape") {
-                      setTitle(card.title || card.id);
-                      setEditingTitle(false);
-                    }
-                  }}
-                  rows={1}
-                  className="w-full resize-none rounded-md border border-teal-300 bg-white px-2 py-1 font-mono text-xl font-bold tracking-tight text-slate-900 outline-none ring-2 ring-teal-600/20"
-                />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setEditingTitle(true)}
-                  className="w-full rounded-md px-1 py-0.5 text-left font-mono text-xl font-bold tracking-tight text-slate-900 hover:bg-slate-50"
-                  title="Clique para editar o nome"
+              <div className="min-w-0 flex-1">
+                {editingTitle ? (
+                  <textarea
+                    ref={titleRef}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveTitle();
+                      }
+                      if (e.key === "Escape") {
+                        setTitle(card.title || card.id);
+                        setEditingTitle(false);
+                      }
+                    }}
+                    rows={1}
+                    className="w-full resize-none rounded-md border border-teal-300 bg-white px-2 py-1 font-mono text-xl font-bold tracking-tight text-slate-900 outline-none ring-2 ring-teal-600/20"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setEditingTitle(true)}
+                    className="w-full rounded-md px-1 py-0.5 text-left font-mono text-xl font-bold tracking-tight text-slate-900 hover:bg-slate-50"
+                    title="Clique para editar o nome"
+                  >
+                    {title}
+                  </button>
+                )}
+                <Select
+                  value={card.attribute ?? undefined}
+                  onValueChange={(attribute) =>
+                    editCard.mutate({ id: card.id, attribute })
+                  }
                 >
-                  {title}
-                </button>
-              )}
+                  <SelectTrigger
+                    className={cn(
+                      "mt-1 h-7 w-auto max-w-full gap-1 border-0 bg-transparent px-1 shadow-none",
+                      "text-sm text-slate-500 hover:bg-slate-50 focus:ring-0 focus:ring-offset-0",
+                      "[&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:opacity-50"
+                    )}
+                  >
+                    <SelectValue placeholder="Definir atributo..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SITE_ATTRIBUTES.map((attr) => (
+                      <SelectItem key={attr} value={attr}>
+                        {attr}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="mb-6 flex flex-wrap gap-2">

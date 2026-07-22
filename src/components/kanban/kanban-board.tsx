@@ -19,10 +19,11 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { FileSpreadsheet, Plus, Search } from "lucide-react";
+import { Check, ChevronsUpDown, FileSpreadsheet, Plus, RotateCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { KanbanCard } from "@/components/kanban/kanban-card";
 import { KanbanColumn } from "@/components/kanban/kanban-column";
 import {
@@ -39,7 +60,102 @@ import {
 } from "@/hooks/use-board";
 import { useSelectedCard } from "@/hooks/use-selected-card";
 import { exportSitebooksToExcel } from "@/lib/export-sitebooks";
-import type { Card, Column } from "@/lib/types";
+import { SITE_ATTRIBUTES, type Card, type Column } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+const ALL_FILTER = "__all__";
+
+function FilterCombobox({
+  value,
+  onChange,
+  options,
+  allLabel,
+  placeholder,
+  searchPlaceholder,
+  emptyLabel,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: readonly string[];
+  allLabel: string;
+  placeholder: string;
+  searchPlaceholder: string;
+  emptyLabel: string;
+  className?: string;
+  "aria-label"?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const display =
+    value === ALL_FILTER
+      ? placeholder
+      : (options.find((o) => o === value) ?? placeholder);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-label={ariaLabel}
+          className={cn(
+            "h-9 w-full justify-between font-normal sm:w-[160px]",
+            value === ALL_FILTER && "text-slate-500",
+            className
+          )}
+        >
+          <span className="truncate">{display}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[200px] p-0">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>{emptyLabel}</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value={allLabel}
+                onSelect={() => {
+                  onChange(ALL_FILTER);
+                  setOpen(false);
+                }}
+              >
+                <Check
+                  className={cn(
+                    "h-4 w-4",
+                    value === ALL_FILTER ? "opacity-100" : "opacity-0"
+                  )}
+                />
+                {allLabel}
+              </CommandItem>
+              {options.map((option) => (
+                <CommandItem
+                  key={option}
+                  value={option}
+                  onSelect={() => {
+                    onChange(option);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      value === option ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span className="truncate">{option}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function KanbanBoard() {
   const { columns, cards, checklist, commentCounts, isLoading, isError } =
@@ -61,12 +177,15 @@ export function KanbanBoard() {
   const [activeColumnId, setActiveColumnId] = useState<string | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterState, setFilterState] = useState<string>(ALL_FILTER);
+  const [filterAttribute, setFilterAttribute] = useState<string>(ALL_FILTER);
   const [newColumnOpen, setNewColumnOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [newCardOpen, setNewCardOpen] = useState<{
     columnId: string;
   } | null>(null);
   const [newCardId, setNewCardId] = useState("");
+  const [newCardAttribute, setNewCardAttribute] = useState("");
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -90,13 +209,44 @@ export function KanbanBoard() {
 
   const columnIds = useMemo(() => columns.map((c) => c.id), [columns]);
 
+  const stateOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const card of cards) {
+      const uf = card.state?.trim();
+      if (uf) set.add(uf);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [cards]);
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
-  function matchesSearch(card: Card) {
-    if (!normalizedQuery) return true;
-    const title = (card.title || "").toLowerCase();
-    const id = card.id.toLowerCase();
-    return title.includes(normalizedQuery) || id.includes(normalizedQuery);
+  function matchesFilters(card: Card) {
+    if (normalizedQuery) {
+      const title = (card.title || "").toLowerCase();
+      const id = card.id.toLowerCase();
+      if (!title.includes(normalizedQuery) && !id.includes(normalizedQuery)) {
+        return false;
+      }
+    }
+    if (filterState !== ALL_FILTER && card.state !== filterState) return false;
+    if (
+      filterAttribute !== ALL_FILTER &&
+      card.attribute !== filterAttribute
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  const hasActiveBoardFilters =
+    !!normalizedQuery ||
+    filterState !== ALL_FILTER ||
+    filterAttribute !== ALL_FILTER;
+
+  function clearBoardFilters() {
+    setSearchQuery("");
+    setFilterState(ALL_FILTER);
+    setFilterAttribute(ALL_FILTER);
   }
 
   function isColumnId(id: string) {
@@ -236,11 +386,12 @@ export function KanbanBoard() {
               className="w-full md:w-auto"
               onClick={() => {
                 try {
-                  if (cards.length === 0) {
+                  const filteredCards = cards.filter(matchesFilters);
+                  if (filteredCards.length === 0) {
                     toast.error("Nenhum site para exportar");
                     return;
                   }
-                  exportSitebooksToExcel(cards, checklist);
+                  exportSitebooksToExcel(filteredCards, checklist);
                   toast.success("Arquivo Excel baixado");
                 } catch {
                   toast.error("Falha ao exportar para Excel");
@@ -259,16 +410,51 @@ export function KanbanBoard() {
           </div>
         </div>
 
-        <div className="relative w-full max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar site por nome ou ID..."
-            className="pl-9"
-            aria-label="Buscar site por nome ou ID"
+        <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="relative w-full max-w-md min-w-[200px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar site por nome ou ID..."
+              className="pl-9"
+              aria-label="Buscar site por nome ou ID"
+            />
+          </div>
+          <FilterCombobox
+            value={filterState}
+            onChange={setFilterState}
+            options={stateOptions}
+            allLabel="Todas as UFs"
+            placeholder="UF"
+            searchPlaceholder="Buscar UF…"
+            emptyLabel="Nenhuma UF encontrada."
+            className="sm:w-[92px]"
+            aria-label="Filtrar por UF"
           />
+          <FilterCombobox
+            value={filterAttribute}
+            onChange={setFilterAttribute}
+            options={SITE_ATTRIBUTES}
+            allLabel="Todos os atributos"
+            placeholder="Atributo"
+            searchPlaceholder="Buscar atributo…"
+            emptyLabel="Nenhum atributo encontrado."
+            className="sm:w-[220px]"
+            aria-label="Filtrar por atributo"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 shrink-0 gap-1.5 text-slate-600"
+            disabled={!hasActiveBoardFilters}
+            onClick={clearBoardFilters}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Limpar Filtros
+          </Button>
         </div>
       </div>
 
@@ -288,7 +474,7 @@ export function KanbanBoard() {
             <div className="flex h-full w-full min-w-0 flex-nowrap items-stretch gap-4 overflow-x-auto overflow-y-hidden overscroll-x-contain pb-4 [-webkit-overflow-scrolling:touch]">
               {columns.map((column) => {
                 const columnCards = (cardsByColumn.get(column.id) ?? []).filter(
-                  matchesSearch
+                  matchesFilters
                 );
                 const isDropTarget =
                   !!activeCard &&
@@ -429,6 +615,7 @@ export function KanbanBoard() {
           if (!open) {
             setNewCardOpen(null);
             setNewCardId("");
+            setNewCardAttribute("");
           }
         }}
       >
@@ -436,31 +623,67 @@ export function KanbanBoard() {
           <DialogHeader>
             <DialogTitle>Novo Site Book</DialogTitle>
           </DialogHeader>
-          <Input
-            placeholder="Ex: PQB001C-SMSROJ2"
-            value={newCardId}
-            onChange={(e) => setNewCardId(e.target.value)}
-            className="font-mono"
-          />
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="new-card-id">ID do site</Label>
+              <Input
+                id="new-card-id"
+                placeholder="Ex: PQB001C-SMSROJ2"
+                value={newCardId}
+                onChange={(e) => setNewCardId(e.target.value)}
+                className="font-mono"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="new-card-attribute">Atributo</Label>
+              <Select
+                value={newCardAttribute || undefined}
+                onValueChange={setNewCardAttribute}
+              >
+                <SelectTrigger id="new-card-attribute" className="w-full">
+                  <SelectValue placeholder="Selecione o atributo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SITE_ATTRIBUTES.map((attr) => (
+                    <SelectItem key={attr} value={attr}>
+                      {attr}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
               onClick={() => {
                 setNewCardOpen(null);
                 setNewCardId("");
+                setNewCardAttribute("");
               }}
             >
               Cancelar
             </Button>
             <Button
-              disabled={!newCardId.trim() || !newCardOpen || addCard.isPending}
+              disabled={
+                !newCardId.trim() ||
+                !newCardAttribute ||
+                !newCardOpen ||
+                addCard.isPending
+              }
               onClick={() => {
-                if (!newCardOpen) return;
+                if (!newCardOpen || !newCardAttribute) return;
                 addCard.mutate(
-                  { id: newCardId.trim(), columnId: newCardOpen.columnId },
+                  {
+                    id: newCardId.trim(),
+                    columnId: newCardOpen.columnId,
+                    attribute: newCardAttribute,
+                  },
                   {
                     onSuccess: () => {
                       setNewCardId("");
+                      setNewCardAttribute("");
                       setNewCardOpen(null);
                     },
                   }

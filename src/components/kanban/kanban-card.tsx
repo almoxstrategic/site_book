@@ -20,6 +20,8 @@ type Props = {
 
 function CardContent({
   title,
+  state,
+  attribute,
   completed,
   total,
   commentCount,
@@ -27,18 +29,28 @@ function CardContent({
   onDelete,
 }: {
   title: string;
+  state: string | null;
+  attribute: string | null;
   completed: number;
   total: number;
   commentCount: number;
   pct: number;
   onDelete?: () => void;
 }) {
+  const uf = state?.trim() || null;
+  const attr = attribute?.trim() || null;
+  const metaLine =
+    uf && attr ? `${uf} / ${attr}` : uf || attr || null;
+
   return (
     <div className="flex items-start gap-2">
       <div className="min-w-0 flex-1 text-left">
         <p className="font-mono text-sm font-semibold tracking-tight text-slate-900">
           {title}
         </p>
+        {metaLine && (
+          <p className="mt-0.5 text-xs text-slate-500">{metaLine}</p>
+        )}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <CheckSquare className="h-3.5 w-3.5 text-teal-700" />
           <span>
@@ -98,6 +110,8 @@ function KanbanCardOverlay({
     <div className="box-border h-full w-full cursor-grabbing rounded-lg border border-teal-300 bg-white p-3 shadow-lg">
       <CardContent
         title={title}
+        state={card.state}
+        attribute={card.attribute}
         completed={completed}
         total={total}
         commentCount={commentCount}
@@ -168,6 +182,8 @@ function KanbanCardSortable({
     >
       <CardContent
         title={title}
+        state={card.state}
+        attribute={card.attribute}
         completed={completed}
         total={total}
         commentCount={commentCount}

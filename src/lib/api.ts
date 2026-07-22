@@ -1,11 +1,12 @@
 import { supabase } from "@/lib/supabase/client";
 import { DEFAULT_CHECKLIST } from "@/lib/checklist-defaults";
-import type {
-  Card,
-  CardChecklistItem,
-  ChecklistTemplate,
-  Column,
-  Comment,
+import {
+  extractSiteState,
+  type Card,
+  type CardChecklistItem,
+  type ChecklistTemplate,
+  type Column,
+  type Comment,
 } from "@/lib/types";
 
 export async function fetchColumns(): Promise<Column[]> {
@@ -75,9 +76,11 @@ export async function fetchCards(): Promise<Card[]> {
 export async function createCard(
   id: string,
   columnId: string,
+  attribute: string,
   title?: string
 ): Promise<Card> {
   const trimmed = id.trim().toUpperCase();
+  const resolvedTitle = (title ?? trimmed).trim() || trimmed;
   const { data: max } = await supabase
     .from("cards")
     .select("position")
@@ -90,8 +93,10 @@ export async function createCard(
     .from("cards")
     .insert({
       id: trimmed,
-      title: (title ?? trimmed).trim() || trimmed,
+      title: resolvedTitle,
       description: "",
+      attribute: attribute.trim(),
+      state: extractSiteState(resolvedTitle),
       column_id: columnId,
       position: (max?.position ?? -1) + 1,
     })
@@ -104,12 +109,20 @@ export async function createCard(
 export async function updateCard(
   id: string,
   updates: Partial<
-    Pick<Card, "column_id" | "position" | "title" | "description">
+    Pick<
+      Card,
+      "column_id" | "position" | "title" | "description" | "attribute" | "state"
+    >
   >
 ): Promise<Card> {
+  const payload = { ...updates };
+  if (payload.title !== undefined && payload.state === undefined) {
+    payload.state = extractSiteState(payload.title);
+  }
+
   const { data, error } = await supabase
     .from("cards")
-    .update(updates)
+    .update(payload)
     .eq("id", id)
     .select()
     .single();

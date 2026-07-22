@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:attributes": "node --env-file=.env.local scripts/seed-site-attributes.mjs",
+    "seed:states": "node --env-file=.env.local scripts/seed-site-states.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

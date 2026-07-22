@@ -20,6 +20,7 @@ function collectTaskLabels(checklist: CardChecklistItem[]): string[] {
   return [...fromDefaults, ...extras];
 }
 
+/** Exports Kanban site books. Pass already-filtered cards to mirror the current view. */
 export function exportSitebooksToExcel(
   cards: Card[],
   checklist: CardChecklistItem[]
@@ -39,9 +40,15 @@ export function exportSitebooksToExcel(
     (a.title || a.id).localeCompare(b.title || b.id)
   );
 
+  const baseHeaders = ["Site", "UF", "ATRIBUTOS"] as const;
+
   const rows = sortedCards.map((card) => {
     const siteName = card.title || card.id;
-    const row: Record<string, string> = { Site: siteName };
+    const row: Record<string, string> = {
+      Site: siteName,
+      UF: card.state?.trim() || "—",
+      ATRIBUTOS: card.attribute?.trim() || "—",
+    };
     const statuses = statusByCardTask.get(card.id);
 
     for (const task of taskLabels) {
@@ -53,7 +60,7 @@ export function exportSitebooksToExcel(
   });
 
   const worksheet = XLSX.utils.json_to_sheet(rows, {
-    header: ["Site", ...taskLabels],
+    header: [...baseHeaders, ...taskLabels],
   });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Site Books");
@@ -63,21 +70,25 @@ export function exportSitebooksToExcel(
 export type FilteredReportRow = {
   nome: string;
   posicao: string;
+  uf: string;
+  atributos: string;
   descricao: string;
   isCompleted: boolean;
 };
 
-/** Exports the currently filtered Relatórios rows (Nome, Posição, Tarefa, Status). */
+/** Exports the currently filtered Relatórios rows. */
 export function exportFilteredReportToExcel(rows: FilteredReportRow[]) {
   const data = rows.map((row) => ({
     "Nome do Site": row.nome,
     Posição: row.posicao,
+    UF: row.uf,
+    ATRIBUTOS: row.atributos,
     Tarefa: row.descricao,
     Status: row.isCompleted ? "Feito" : "Pendente",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(data, {
-    header: ["Nome do Site", "Posição", "Tarefa", "Status"],
+    header: ["Nome do Site", "Posição", "UF", "ATRIBUTOS", "Tarefa", "Status"],
   });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório");
@@ -87,6 +98,8 @@ export function exportFilteredReportToExcel(rows: FilteredReportRow[]) {
 export type CrossFilteredReportRow = {
   siteName: string;
   columnName: string;
+  uf: string;
+  atributos: string;
   task1Label: string;
   task1Completed: boolean;
   task2Label: string | null;
@@ -103,18 +116,22 @@ export function exportCrossFilteredReportToExcel(
     ? [
         "Nome do Site",
         "Posição",
+        "UF",
+        "ATRIBUTOS",
         "Tarefa 1",
         "Status 1",
         "Tarefa 2",
         "Status 2",
       ]
-    : ["Nome do Site", "Posição", "Tarefa", "Status"];
+    : ["Nome do Site", "Posição", "UF", "ATRIBUTOS", "Tarefa", "Status"];
 
   const data = rows.map((row) => {
     if (hasTask2) {
       return {
         "Nome do Site": row.siteName,
         Posição: row.columnName,
+        UF: row.uf,
+        ATRIBUTOS: row.atributos,
         "Tarefa 1": row.task1Label,
         "Status 1": row.task1Completed ? "Feito" : "Pendente",
         "Tarefa 2": row.task2Label ?? "—",
@@ -130,6 +147,8 @@ export function exportCrossFilteredReportToExcel(
     return {
       "Nome do Site": row.siteName,
       Posição: row.columnName,
+      UF: row.uf,
+      ATRIBUTOS: row.atributos,
       Tarefa: row.task1Label,
       Status: row.task1Completed ? "Feito" : "Pendente",
     };

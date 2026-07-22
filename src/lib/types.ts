@@ -5,10 +5,30 @@ export type Column = {
   created_at: string;
 };
 
+export const SITE_ATTRIBUTES = [
+  "Poste - Serv. Próprio",
+  "Poste - Serv. Terceiro",
+  "Torre - Serv. Próprio",
+  "Torre - Serv. Terceiro",
+  "ROOFTOP - Serv. Próprio",
+  "ROOFTOP - Serv. Terceiro",
+] as const;
+
+export type SiteAttribute = (typeof SITE_ATTRIBUTES)[number];
+
+/** First 2 letters of the site title/ID, uppercased (UF). */
+export function extractSiteState(titleOrId: string): string {
+  return titleOrId.trim().substring(0, 2).toUpperCase();
+}
+
 export type Card = {
   id: string;
   title: string;
   description: string;
+  /** Nullable for legacy rows created before this field existed */
+  attribute: string | null;
+  /** UF derived from title; nullable for legacy rows */
+  state: string | null;
   column_id: string;
   position: number;
   created_at: string;

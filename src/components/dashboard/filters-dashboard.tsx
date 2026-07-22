@@ -43,10 +43,14 @@ import {
   exportFilteredReportToExcel,
 } from "@/lib/export-sitebooks";
 import type { CardChecklistItem, FilterStatus } from "@/lib/types";
+import { SITE_ATTRIBUTES } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Separator } from "@/components/ui/separator";
 
 const ALL_SITES = "__all_sites__";
 const ALL_POSITIONS = "__all_positions__";
+const ALL_STATES = "__all_states__";
+const ALL_ATTRIBUTES = "__all_attributes__";
 const ALL_TASKS = "__all_tasks__";
 const NO_TASK = "__no_task__";
 const DEFAULT_STATUS: FilterStatus | "all" = "pending";
@@ -55,6 +59,8 @@ type ChecklistRow = {
   item: CardChecklistItem;
   siteName: string;
   columnName: string;
+  state: string;
+  attribute: string;
   taskLabel: string;
 };
 
@@ -62,6 +68,8 @@ type SiteCrossRow = {
   cardId: string;
   siteName: string;
   columnName: string;
+  state: string;
+  attribute: string;
   task1Label: string;
   task1Item: CardChecklistItem | null;
   task1Completed: boolean;
@@ -219,6 +227,9 @@ export function FiltersDashboard() {
 
   const [siteId, setSiteId] = useState<string>(ALL_SITES);
   const [columnId, setColumnId] = useState<string>(ALL_POSITIONS);
+  const [stateFilter, setStateFilter] = useState<string>(ALL_STATES);
+  const [attributeFilter, setAttributeFilter] =
+    useState<string>(ALL_ATTRIBUTES);
   const [task1, setTask1] = useState<string>(ALL_TASKS);
   const [status1, setStatus1] = useState<FilterStatus | "all">(DEFAULT_STATUS);
   const [task2, setTask2] = useState<string>(NO_TASK);
@@ -253,6 +264,31 @@ export function FiltersDashboard() {
     }
     return map;
   }, [cards, columnNameById]);
+
+  const attributeByCardId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of cards) {
+      map.set(c.id, c.attribute?.trim() || "—");
+    }
+    return map;
+  }, [cards]);
+
+  const stateByCardId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of cards) {
+      map.set(c.id, c.state?.trim() || "—");
+    }
+    return map;
+  }, [cards]);
+
+  const stateOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of cards) {
+      const uf = c.state?.trim();
+      if (uf) set.add(uf);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [cards]);
 
   const cardColumnIdById = useMemo(() => {
     const map = new Map<string, string>();
@@ -302,6 +338,20 @@ export function FiltersDashboard() {
           return false;
         }
 
+        if (
+          stateFilter !== ALL_STATES &&
+          stateByCardId.get(item.card_id) !== stateFilter
+        ) {
+          return false;
+        }
+
+        if (
+          attributeFilter !== ALL_ATTRIBUTES &&
+          attributeByCardId.get(item.card_id) !== attributeFilter
+        ) {
+          return false;
+        }
+
         if (task1Specific && checklistItemLabel(item) !== task1) return false;
 
         if (status1 === "completed" && !item.is_completed) return false;
@@ -320,6 +370,8 @@ export function FiltersDashboard() {
         item,
         siteName: titleById.get(item.card_id) ?? item.card_id,
         columnName: columnByCardId.get(item.card_id) ?? "—",
+        state: stateByCardId.get(item.card_id) ?? "—",
+        attribute: attributeByCardId.get(item.card_id) ?? "—",
         taskLabel: checklistItemLabel(item),
       }));
   }, [
@@ -327,7 +379,11 @@ export function FiltersDashboard() {
     checklist,
     siteId,
     columnId,
+    stateFilter,
+    attributeFilter,
     cardColumnIdById,
+    stateByCardId,
+    attributeByCardId,
     task1,
     task1Specific,
     status1,
@@ -345,6 +401,13 @@ export function FiltersDashboard() {
     for (const card of sortedCards) {
       if (siteId !== ALL_SITES && card.id !== siteId) continue;
       if (columnId !== ALL_POSITIONS && card.column_id !== columnId) continue;
+      if (stateFilter !== ALL_STATES && card.state !== stateFilter) continue;
+      if (
+        attributeFilter !== ALL_ATTRIBUTES &&
+        card.attribute !== attributeFilter
+      ) {
+        continue;
+      }
 
       const items = checklistByCard.get(card.id) ?? [];
       const item1 = items.find((i) => checklistItemLabel(i) === task1) ?? null;
@@ -357,6 +420,8 @@ export function FiltersDashboard() {
         cardId: card.id,
         siteName: card.title || card.id,
         columnName: columnNameById.get(card.column_id) ?? "—",
+        state: card.state?.trim() || "—",
+        attribute: card.attribute?.trim() || "—",
         task1Label: task1,
         task1Item: item1,
         task1Completed: item1.is_completed,
@@ -372,6 +437,8 @@ export function FiltersDashboard() {
     sortedCards,
     siteId,
     columnId,
+    stateFilter,
+    attributeFilter,
     checklistByCard,
     task1,
     task2,
@@ -388,6 +455,8 @@ export function FiltersDashboard() {
   const hasActiveFilters =
     siteId !== ALL_SITES ||
     columnId !== ALL_POSITIONS ||
+    stateFilter !== ALL_STATES ||
+    attributeFilter !== ALL_ATTRIBUTES ||
     task1Specific ||
     task2Active ||
     status1 !== DEFAULT_STATUS ||
@@ -399,6 +468,8 @@ export function FiltersDashboard() {
   function clearFilters() {
     setSiteId(ALL_SITES);
     setColumnId(ALL_POSITIONS);
+    setStateFilter(ALL_STATES);
+    setAttributeFilter(ALL_ATTRIBUTES);
     setTask1(ALL_TASKS);
     setStatus1(DEFAULT_STATUS);
     setTask2(NO_TASK);
@@ -467,6 +538,8 @@ export function FiltersDashboard() {
           crossRows.map((row) => ({
             siteName: row.siteName,
             columnName: row.columnName,
+            uf: row.state,
+            atributos: row.attribute,
             task1Label: row.task1Label,
             task1Completed: row.task1Completed,
             task2Label: row.task2Label,
@@ -478,6 +551,8 @@ export function FiltersDashboard() {
           checklistRows.map((row) => ({
             nome: row.siteName,
             posicao: row.columnName,
+            uf: row.state,
+            atributos: row.attribute,
             descricao: row.taskLabel,
             isCompleted: row.item.is_completed,
           }))
@@ -513,7 +588,7 @@ export function FiltersDashboard() {
           Filtros de relatório
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-end">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 xl:items-end">
           <div className="space-y-2">
             <Label>Nome do site</Label>
             <Popover open={siteOpen} onOpenChange={setSiteOpen}>
@@ -596,6 +671,42 @@ export function FiltersDashboard() {
             </Select>
           </div>
 
+          <div className="space-y-2">
+            <Label>Estado</Label>
+            <Select value={stateFilter} onValueChange={setStateFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todos os estados" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_STATES}>Todos os estados</SelectItem>
+                {stateOptions.map((uf) => (
+                  <SelectItem key={uf} value={uf}>
+                    {uf}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Atributo</Label>
+            <Select value={attributeFilter} onValueChange={setAttributeFilter}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Todos os atributos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ATTRIBUTES}>
+                  Todos os atributos
+                </SelectItem>
+                {SITE_ATTRIBUTES.map((attr) => (
+                  <SelectItem key={attr} value={attr}>
+                    {attr}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <TaskCombobox
             label={showSecondFilter ? "Tarefa 1" : "Tarefa"}
             value={task1}
@@ -628,33 +739,36 @@ export function FiltersDashboard() {
         </div>
 
         {showSecondFilter && (
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4 xl:items-end">
-            <div className="hidden xl:col-span-2 xl:block" />
-            <TaskCombobox
-              label="Tarefa 2"
-              value={task2}
-              onChange={setTask2}
-              mode="secondary"
-              taskOptions={taskOptions}
-              excludeValue={task1Specific ? task1 : undefined}
-            />
-            <div className="space-y-2">
-              <Label>Status 2</Label>
-              <Select
-                value={status2}
-                onValueChange={(v) => setStatus2(v as FilterStatus)}
-                disabled={!task2Active}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pendente</SelectItem>
-                  <SelectItem value="completed">Feito</SelectItem>
-                </SelectContent>
-              </Select>
+          <>
+            <Separator className="my-5 opacity-50" />
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 xl:items-end">
+              <div className="hidden 2xl:col-span-4 2xl:block" />
+              <TaskCombobox
+                label="Tarefa 2"
+                value={task2}
+                onChange={setTask2}
+                mode="secondary"
+                taskOptions={taskOptions}
+                excludeValue={task1Specific ? task1 : undefined}
+              />
+              <div className="space-y-2">
+                <Label>Status 2</Label>
+                <Select
+                  value={status2}
+                  onValueChange={(v) => setStatus2(v as FilterStatus)}
+                  disabled={!task2Active}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="completed">Feito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -737,6 +851,7 @@ export function FiltersDashboard() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Nome do Site</th>
                   <th className="px-4 py-3 font-medium">Posição</th>
+                  <th className="px-4 py-3 font-medium">Atributos</th>
                   <th className="px-4 py-3 font-medium">Tarefa 1</th>
                   <th className="px-4 py-3 font-medium">Status 1</th>
                   <th className="px-4 py-3 font-medium">Tarefa 2</th>
@@ -747,7 +862,7 @@ export function FiltersDashboard() {
                 {crossRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Nenhum site atende às duas condições ao mesmo tempo.
@@ -769,6 +884,7 @@ export function FiltersDashboard() {
                       </button>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{row.columnName}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.attribute}</td>
                     <td className="px-4 py-3 text-slate-600">{row.task1Label}</td>
                     <td className="px-4 py-3">
                       <StatusCell
@@ -805,6 +921,7 @@ export function FiltersDashboard() {
                 <tr>
                   <th className="px-4 py-3 font-medium">Nome do Site</th>
                   <th className="px-4 py-3 font-medium">Posição</th>
+                  <th className="px-4 py-3 font-medium">Atributos</th>
                   <th className="px-4 py-3 font-medium">Tarefa</th>
                   <th className="px-4 py-3 font-medium">Status</th>
                 </tr>
@@ -813,7 +930,7 @@ export function FiltersDashboard() {
                 {checklistRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-4 py-10 text-center text-slate-400"
                     >
                       Nenhum resultado para a combinação de filtros atual.
@@ -835,6 +952,7 @@ export function FiltersDashboard() {
                       </button>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{row.columnName}</td>
+                    <td className="px-4 py-3 text-slate-600">{row.attribute}</td>
                     <td className="px-4 py-3 text-slate-600">{row.taskLabel}</td>
                     <td className="px-4 py-3">
                       <StatusCell
