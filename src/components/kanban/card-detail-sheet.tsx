@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -34,8 +35,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useBoardMutations, useComments } from "@/hooks/use-board";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { useBoardMutations, useComments, queryKeys } from "@/hooks/use-board";
+import { fetchSiteActivityHistory } from "@/lib/api";
 import { checklistItemLabel } from "@/lib/checklist-defaults";
+import { ActivityHistoryPanel } from "@/components/checklist/activity-history-panel";
 import { ChecklistSearchInput } from "@/components/checklist/checklist-search-input";
 import { SITE_ATTRIBUTES, type Card, type CardChecklistItem, type Column } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -115,6 +124,14 @@ export function CardDetailSheet({
     applyDefaultChecklists,
   } = useBoardMutations();
   const comments = useComments(card?.id ?? null);
+
+  const { data: activityHistory = [], isLoading: activityLoading } = useQuery({
+    queryKey: card
+      ? queryKeys.siteActivityHistory(card.id)
+      : ["site-activity-history", "none"],
+    queryFn: () => fetchSiteActivityHistory(card!.id),
+    enabled: !!card && open,
+  });
 
   const [title, setTitle] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
@@ -624,19 +641,6 @@ export function CardDetailSheet({
 
           <aside className="flex min-h-0 flex-col border-t border-slate-100 bg-slate-50/40 md:border-l md:border-t-0">
             <div className="space-y-2 border-b border-slate-100 px-4 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                  <MessageSquare className="h-4 w-4 text-slate-500" />
-                  Comentários e atividade
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowDetails((v) => !v)}
-                  className="text-xs font-medium text-slate-500 hover:text-slate-800"
-                >
-                  {showDetails ? "Ocultar Detalhes" : "Mostrar Detalhes"}
-                </button>
-              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -649,168 +653,212 @@ export function CardDetailSheet({
               </Button>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              <div className="mb-5 flex gap-2">
-                <UserAvatar />
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Input
-                    value={authorName}
-                    onChange={(e) => setAuthorName(e.target.value)}
-                    placeholder="Seu nome"
-                    className="h-9 border-slate-200 bg-white text-sm shadow-sm"
-                  />
-                  <Textarea
-                    value={commentDraft}
-                    onChange={(e) => setCommentDraft(e.target.value)}
-                    placeholder="Escrever um comentário..."
-                    className="min-h-[72px] resize-none border-slate-200 bg-white text-sm shadow-sm"
-                  />
-                  <Button
-                    size="sm"
-                    disabled={
-                      !authorName.trim() ||
-                      !commentDraft.trim() ||
-                      comments.add.isPending
-                    }
-                    onClick={() =>
-                      comments.add.mutate(
-                        {
-                          author: authorName.trim(),
-                          content: commentDraft.trim(),
-                        },
-                        {
-                          onSuccess: () => {
-                            setCommentDraft("");
-                          },
-                        }
-                      )
-                    }
-                  >
-                    Salvar
-                  </Button>
-                </div>
+            <Tabs
+              defaultValue="comments"
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <div className="border-b border-slate-100 px-4 pt-3">
+                <TabsList className="grid h-auto w-full grid-cols-2 gap-1">
+                  <TabsTrigger value="comments" className="px-2 text-xs sm:text-sm">
+                    Comentários
+                  </TabsTrigger>
+                  <TabsTrigger value="activity" className="px-2 text-xs sm:text-sm">
+                    Registro de atividades
+                  </TabsTrigger>
+                </TabsList>
               </div>
 
-              <ul className="space-y-4">
-                {(comments.data ?? [])
-                  .slice()
-                  .reverse()
-                  .map((c) => {
-                    const { absolute, relative } = formatCommentDate(
-                      c.created_at
-                    );
-                    return (
-                      <li key={c.id} className="flex gap-2">
-                        <UserAvatar />
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            <span className="text-sm font-semibold text-slate-800">
-                              {c.author || "Anônimo"}
-                            </span>
-                            <time
-                              dateTime={c.created_at}
-                              title={relative}
-                              className="text-xs text-slate-400"
-                            >
-                              {absolute}
-                            </time>
-                          </div>
-                          {editingCommentId === c.id ? (
-                            <div className="space-y-2">
-                              <Textarea
-                                value={editCommentText}
-                                onChange={(e) =>
-                                  setEditCommentText(e.target.value)
-                                }
-                                className="min-h-[64px] text-sm"
-                              />
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  onClick={() =>
-                                    comments.edit.mutate(
-                                      {
-                                        id: c.id,
-                                        content: editCommentText.trim(),
-                                      },
-                                      {
-                                        onSuccess: () => {
-                                          setEditingCommentId(null);
-                                          setEditCommentText("");
-                                        },
-                                      }
-                                    )
-                                  }
-                                >
-                                  Salvar
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setEditingCommentId(null)}
-                                >
-                                  Cancelar
-                                </Button>
-                              </div>
+              <TabsContent
+                value="comments"
+                className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 py-4 data-[state=inactive]:hidden"
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                    <MessageSquare className="h-4 w-4 text-slate-500" />
+                    Comentários
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDetails((v) => !v)}
+                    className="text-xs font-medium text-slate-500 hover:text-slate-800"
+                  >
+                    {showDetails ? "Ocultar Detalhes" : "Mostrar Detalhes"}
+                  </button>
+                </div>
+
+                <div className="mb-5 flex gap-2">
+                  <UserAvatar />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <Input
+                      value={authorName}
+                      onChange={(e) => setAuthorName(e.target.value)}
+                      placeholder="Seu nome"
+                      className="h-9 border-slate-200 bg-white text-sm shadow-sm"
+                    />
+                    <Textarea
+                      value={commentDraft}
+                      onChange={(e) => setCommentDraft(e.target.value)}
+                      placeholder="Escrever um comentário..."
+                      className="min-h-[72px] resize-none border-slate-200 bg-white text-sm shadow-sm"
+                    />
+                    <Button
+                      size="sm"
+                      disabled={
+                        !authorName.trim() ||
+                        !commentDraft.trim() ||
+                        comments.add.isPending
+                      }
+                      onClick={() =>
+                        comments.add.mutate(
+                          {
+                            author: authorName.trim(),
+                            content: commentDraft.trim(),
+                          },
+                          {
+                            onSuccess: () => {
+                              setCommentDraft("");
+                            },
+                          }
+                        )
+                      }
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+
+                <ul className="space-y-4">
+                  {(comments.data ?? [])
+                    .slice()
+                    .reverse()
+                    .map((c) => {
+                      const { absolute, relative } = formatCommentDate(
+                        c.created_at
+                      );
+                      return (
+                        <li key={c.id} className="flex gap-2">
+                          <UserAvatar />
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className="text-sm font-semibold text-slate-800">
+                                {c.author || "Anônimo"}
+                              </span>
+                              <time
+                                dateTime={c.created_at}
+                                title={relative}
+                                className="text-xs text-slate-400"
+                              >
+                                {absolute}
+                              </time>
                             </div>
-                          ) : (
-                            <>
-                              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-                                {c.content}
-                              </div>
-                              <div className="mt-1.5 flex gap-3 text-xs">
-                                <button
-                                  type="button"
-                                  className="text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
-                                  onClick={() => {
-                                    setEditingCommentId(c.id);
-                                    setEditCommentText(c.content);
-                                  }}
-                                >
-                                  Editar
-                                </button>
-                                <button
-                                  type="button"
-                                  className="text-slate-500 underline-offset-2 hover:text-rose-600 hover:underline"
-                                  onClick={() => {
-                                    if (confirm("Excluir comentário?")) {
-                                      comments.remove.mutate(c.id);
+                            {editingCommentId === c.id ? (
+                              <div className="space-y-2">
+                                <Textarea
+                                  value={editCommentText}
+                                  onChange={(e) =>
+                                    setEditCommentText(e.target.value)
+                                  }
+                                  className="min-h-[64px] text-sm"
+                                />
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() =>
+                                      comments.edit.mutate(
+                                        {
+                                          id: c.id,
+                                          content: editCommentText.trim(),
+                                        },
+                                        {
+                                          onSuccess: () => {
+                                            setEditingCommentId(null);
+                                            setEditCommentText("");
+                                          },
+                                        }
+                                      )
                                     }
-                                  }}
-                                >
-                                  Excluir
-                                </button>
+                                  >
+                                    Salvar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setEditingCommentId(null)}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </div>
                               </div>
-                            </>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
+                            ) : (
+                              <>
+                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+                                  {c.content}
+                                </div>
+                                <div className="mt-1.5 flex gap-3 text-xs">
+                                  <button
+                                    type="button"
+                                    className="text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline"
+                                    onClick={() => {
+                                      setEditingCommentId(c.id);
+                                      setEditCommentText(c.content);
+                                    }}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="text-slate-500 underline-offset-2 hover:text-rose-600 hover:underline"
+                                    onClick={() => {
+                                      if (confirm("Excluir comentário?")) {
+                                        comments.remove.mutate(c.id);
+                                      }
+                                    }}
+                                  >
+                                    Excluir
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
 
-                {showDetails && (
-                  <li className="flex gap-2">
-                    <UserAvatar />
-                    <p className="pt-1 text-sm leading-snug text-slate-600">
-                      Alguém adicionou este cartão a{" "}
-                      <span className="font-medium">{columnName}</span>{" "}
-                      <time
-                        dateTime={card.created_at}
-                        className="text-slate-400"
-                      >
-                        {formatCommentDate(card.created_at).absolute}
-                      </time>
+                  {showDetails && (
+                    <li className="flex gap-2">
+                      <UserAvatar />
+                      <p className="pt-1 text-sm leading-snug text-slate-600">
+                        Alguém adicionou este cartão a{" "}
+                        <span className="font-medium">{columnName}</span>{" "}
+                        <time
+                          dateTime={card.created_at}
+                          className="text-slate-400"
+                        >
+                          {formatCommentDate(card.created_at).absolute}
+                        </time>
+                      </p>
+                    </li>
+                  )}
+
+                  {(comments.data ?? []).length === 0 && !showDetails && (
+                    <p className="text-sm text-slate-400">
+                      Nenhum comentário ainda.
                     </p>
-                  </li>
-                )}
+                  )}
+                </ul>
+              </TabsContent>
 
-                {(comments.data ?? []).length === 0 && !showDetails && (
-                  <p className="text-sm text-slate-400">
-                    Nenhuma atividade ainda.
-                  </p>
-                )}
-              </ul>
-            </div>
+              <TabsContent
+                value="activity"
+                className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 py-4 data-[state=inactive]:hidden"
+              >
+                <ActivityHistoryPanel
+                  title={null}
+                  entries={activityHistory}
+                  isLoading={activityLoading}
+                />
+              </TabsContent>
+            </Tabs>
           </aside>
         </div>
       </DialogContent>

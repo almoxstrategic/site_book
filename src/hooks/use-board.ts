@@ -37,6 +37,8 @@ export const queryKeys = {
   templates: ["templates"] as const,
   commentCounts: ["commentCounts"] as const,
   comments: (cardId: string) => ["comments", cardId] as const,
+  siteActivityHistory: (siteId: string) =>
+    ["site-activity-history", siteId] as const,
 };
 
 /** Subscribe once at the app shell — do not call from every consumer of useBoardData. */
@@ -350,8 +352,13 @@ export function useBoardMutations() {
       if (ctx?.previous) qc.setQueryData(queryKeys.checklist, ctx.previous);
       toast.error(e.message || "Erro ao atualizar checklist");
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Checklist atualizado");
+      if (data?.card_id) {
+        qc.invalidateQueries({
+          queryKey: queryKeys.siteActivityHistory(data.card_id),
+        });
+      }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.checklist });

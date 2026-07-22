@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase/client";
-import { DEFAULT_CHECKLIST } from "@/lib/checklist-defaults";
+import { DEFAULT_CHECKLIST, checklistItemLabel } from "@/lib/checklist-defaults";
 import {
   extractSiteState,
   type Card,
@@ -13,6 +13,7 @@ import {
   type TeamChecklistSection,
   type TeamChecklistItem,
   type TeamTaskHistory,
+  type SiteActivityHistory,
 } from "@/lib/types";
 
 export async function fetchColumns(): Promise<Column[]> {
@@ -216,7 +217,35 @@ export async function toggleChecklistItem(
     .select(CHECKLIST_SELECT)
     .single();
   if (error) throw error;
-  return data as CardChecklistItem;
+
+  const item = data as CardChecklistItem;
+  const label = checklistItemLabel(item);
+  const action_description = isCompleted
+    ? `${label} marcado como feito`
+    : `${label} desmarcado`;
+  const { error: historyError } = await supabase
+    .from("site_activity_history")
+    .insert({
+      site_id: item.card_id,
+      action_description,
+    });
+  if (historyError) {
+    console.error("Failed to log site activity history:", historyError);
+  }
+
+  return item;
+}
+
+export async function fetchSiteActivityHistory(
+  siteId: string
+): Promise<SiteActivityHistory[]> {
+  const { data, error } = await supabase
+    .from("site_activity_history")
+    .select("*")
+    .eq("site_id", siteId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as SiteActivityHistory[]) ?? [];
 }
 
 export async function updateChecklistItemLabel(
@@ -858,13 +887,16 @@ export async function toggleTeamChecklistItem(
     .single();
   if (error) throw error;
 
-  if (isCompleted && opts) {
+  if (opts) {
     const label = opts.label.trim() || "Tarefa";
+    const action_description = isCompleted
+      ? `${label} marcado como feito`
+      : `${label} desmarcado`;
     const { error: historyError } = await supabase
       .from("team_task_history")
       .insert({
         team_task_id: opts.teamTaskId,
-        action_description: `${label} marcado como feito`,
+        action_description,
       });
     if (historyError) {
       console.error("Failed to log team task history:", historyError);

@@ -128,3 +128,17 @@ export type TeamTaskHistory = {
   action_description: string;
   created_at: string;
 };
+
+/** Checklist activity log for a site (card). */
+export type SiteActivityHistory = {
+  id: string;
+  site_id: string;
+  action_description: string;
+  created_at: string;
+};
+
+export type ActivityHistoryEntry = {
+  id: string;
+  action_description: string;
+  created_at: string;
+};

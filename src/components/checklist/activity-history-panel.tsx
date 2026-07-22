@@ -4,14 +4,20 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { History } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import type { TeamTaskHistory } from "@/lib/types";
+import type { ActivityHistoryEntry } from "@/lib/types";
 
 type Props = {
-  entries: TeamTaskHistory[];
+  entries: ActivityHistoryEntry[];
   isLoading?: boolean;
+  /** When null/undefined, header title is hidden (e.g. inside a tab). */
+  title?: string | null;
 };
 
-export function TeamTaskHistoryPanel({ entries, isLoading }: Props) {
+export function ActivityHistoryPanel({
+  entries,
+  isLoading,
+  title = "Histórico",
+}: Props) {
   const [historySearch, setHistorySearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -24,10 +30,12 @@ export function TeamTaskHistoryPanel({ entries, isLoading }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
-        <History className="h-4 w-4 text-slate-500" />
-        Histórico
-      </div>
+      {title ? (
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-800">
+          <History className="h-4 w-4 text-slate-500" />
+          {title}
+        </div>
+      ) : null}
 
       <Input
         type="search"

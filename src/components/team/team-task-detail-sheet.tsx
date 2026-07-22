@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { ChecklistEditor } from "@/components/checklist/checklist-editor";
 import { ImportTeamChecklistDialog } from "@/components/team/import-team-checklist-dialog";
-import { TeamTaskHistoryPanel } from "@/components/team/team-task-history-panel";
+import { ActivityHistoryPanel } from "@/components/checklist/activity-history-panel";
 import {
   createTeamChecklistItem,
   createTeamChecklistItemsBulk,
@@ -201,8 +201,8 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
       }
       toast.error(e.message || "Erro ao atualizar item");
     },
-    onSuccess: (_data, variables) => {
-      if (variables.isCompleted) invalidateHistory();
+    onSuccess: () => {
+      invalidateHistory();
     },
     onSettled: invalidateChecklist,
   });
@@ -380,7 +380,7 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
             </div>
 
             <aside className="min-h-0 border-t border-slate-100 bg-muted/30 px-4 py-4 md:border-l md:border-t-0">
-              <TeamTaskHistoryPanel
+              <ActivityHistoryPanel
                 entries={history}
                 isLoading={historyLoading}
               />
