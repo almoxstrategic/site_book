@@ -291,23 +291,25 @@ export function CommentsSearchView() {
           </Button>
         </div>
 
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-slate-500">Autor</Label>
+        <div className="mt-4 flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm font-medium text-slate-700">Autor</Label>
             <AuthorCombobox
               value={authorFilter}
               onChange={setAuthorFilter}
               authors={authors}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-slate-500">Ordenação</Label>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm font-medium text-slate-700">
+              Ordenação
+            </Label>
             <Select
               value={sortOrder}
               onValueChange={(v) => setSortOrder(v as SortOrder)}
             >
               <SelectTrigger
-                className="w-full sm:w-[220px]"
+                className="h-9 w-full sm:w-[220px]"
                 aria-label="Ordenar por data"
               >
                 <SelectValue />
@@ -322,7 +324,7 @@ export function CommentsSearchView() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-9 shrink-0 gap-1.5 text-slate-600 sm:mb-0"
+            className="h-9 shrink-0 gap-1.5 text-slate-600"
             disabled={!hasActiveFilters}
             onClick={clearFilters}
           >
