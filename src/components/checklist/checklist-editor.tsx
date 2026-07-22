@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckSquare, ListPlus, Plus, Trash2 } from "lucide-react";
+import { CheckSquare, ClipboardPaste, Copy, ListPlus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { TeamChecklistItem, TeamChecklistSection } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +20,7 @@ export type ChecklistEditorHandlers = {
   onRenameSection: (sectionId: string, title: string) => void;
   onDeleteSection: (sectionId: string) => void;
   onAddItem: (sectionId: string, label: string) => void;
+  onBulkAddItems: (sectionId: string, labels: string[]) => void;
   onToggleItem: (itemId: string, isCompleted: boolean) => void;
   onRenameItem: (itemId: string, label: string) => void;
   onDeleteItem: (itemId: string) => void;
@@ -24,7 +31,111 @@ type Props = {
   items: TeamChecklistItem[];
   handlers: ChecklistEditorHandlers;
   pending?: boolean;
+  onImportClick?: () => void;
 };
+
+function BulkPasteButton({
+  disabled,
+  onConfirm,
+}: {
+  disabled?: boolean;
+  onConfirm: (labels: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pastedText, setPastedText] = useState("");
+
+  function handleConfirm() {
+    const labels = pastedText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (labels.length === 0) return;
+    onConfirm(labels);
+    setPastedText("");
+    setOpen(false);
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setPastedText("");
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 gap-1.5 bg-slate-100 text-xs font-medium text-slate-600 shadow-none"
+          type="button"
+          disabled={disabled}
+        >
+          <ClipboardPaste className="h-3.5 w-3.5" />
+          Colar do Excel
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-3" align="start">
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-slate-800">Adicionar em lote</p>
+          <Textarea
+            value={pastedText}
+            onChange={(e) => setPastedText(e.target.value)}
+            placeholder="Cole aqui as linhas copiadas do Excel (Ctrl+V)..."
+            className="min-h-[120px] resize-y text-sm"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              onClick={() => setOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              disabled={!pastedText.trim()}
+              onClick={handleConfirm}
+            >
+              Confirmar
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AddItemActions({
+  disabled,
+  onAddOne,
+  onBulkAdd,
+  className,
+}: {
+  disabled?: boolean;
+  onAddOne: () => void;
+  onBulkAdd: (labels: string[]) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="h-8 bg-slate-100 text-xs font-medium text-slate-600 shadow-none"
+        type="button"
+        disabled={disabled}
+        onClick={onAddOne}
+      >
+        Adicionar tarefa
+      </Button>
+      <BulkPasteButton disabled={disabled} onConfirm={onBulkAdd} />
+    </div>
+  );
+}
 
 type DraftMode =
   | { kind: "topic" }
@@ -39,6 +150,7 @@ export function ChecklistEditor({
   items,
   handlers,
   pending = false,
+  onImportClick,
 }: Props) {
   const [draftMode, setDraftMode] = useState<DraftMode>(null);
   const [draftText, setDraftText] = useState("");
@@ -271,18 +383,30 @@ export function ChecklistEditor({
           <p className="text-sm text-slate-500">
             Nenhum checklist nesta tarefa.
           </p>
-          <Button
-            className="mt-3"
-            size="sm"
-            disabled={pending}
-            onClick={() => {
-              setDraftMode({ kind: "topic" });
-              setDraftText("");
-            }}
-          >
-            <ListPlus className="h-4 w-4" />
-            Adicionar tópico
-          </Button>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <Button
+              size="sm"
+              disabled={pending}
+              onClick={() => {
+                setDraftMode({ kind: "topic" });
+                setDraftText("");
+              }}
+            >
+              <ListPlus className="h-4 w-4" />
+              Adicionar tópico
+            </Button>
+            {onImportClick && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={onImportClick}
+              >
+                <Copy className="h-4 w-4" />
+                Copiar de outra tarefa
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
@@ -340,19 +464,17 @@ export function ChecklistEditor({
             <div className="mb-3">{renderItems(topic.id)}</div>
             {draftMode?.kind === "item" &&
             draftMode.sectionId === topic.id ? null : (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="mb-4 h-8 bg-slate-100 text-xs font-medium text-slate-600 shadow-none"
-                type="button"
+              <AddItemActions
+                className="mb-4"
                 disabled={pending}
-                onClick={() => {
+                onAddOne={() => {
                   setDraftMode({ kind: "item", sectionId: topic.id });
                   setDraftText("");
                 }}
-              >
-                Adicionar tarefa
-              </Button>
+                onBulkAdd={(labels) =>
+                  handlers.onBulkAddItems(topic.id, labels)
+                }
+              />
             )}
 
             {/* Subtopics */}
@@ -396,19 +518,17 @@ export function ChecklistEditor({
                       draftMode?.kind === "item" &&
                       draftMode.sectionId === sub.id
                     ) && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="mt-2 h-8 bg-slate-100 text-xs font-medium text-slate-600 shadow-none"
-                        type="button"
+                      <AddItemActions
+                        className="mt-2"
                         disabled={pending}
-                        onClick={() => {
+                        onAddOne={() => {
                           setDraftMode({ kind: "item", sectionId: sub.id });
                           setDraftText("");
                         }}
-                      >
-                        Adicionar tarefa
-                      </Button>
+                        onBulkAdd={(labels) =>
+                          handlers.onBulkAddItems(sub.id, labels)
+                        }
+                      />
                     )}
                   </div>
                 );
@@ -482,20 +602,35 @@ export function ChecklistEditor({
       )}
 
       {draftMode?.kind !== "topic" && topics.length > 0 && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 border-teal-200 text-teal-800 hover:bg-teal-50"
-          type="button"
-          disabled={pending}
-          onClick={() => {
-            setDraftMode({ kind: "topic" });
-            setDraftText("");
-          }}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Adicionar tópico
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-teal-200 text-teal-800 hover:bg-teal-50"
+            type="button"
+            disabled={pending}
+            onClick={() => {
+              setDraftMode({ kind: "topic" });
+              setDraftText("");
+            }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Adicionar tópico
+          </Button>
+          {onImportClick && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              type="button"
+              disabled={pending}
+              onClick={onImportClick}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copiar de outra tarefa
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

@@ -679,6 +679,110 @@ export async function deleteTeamChecklistSection(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function importTeamChecklist(params: {
+  targetTaskId: string;
+  sourceTaskId: string;
+  /** When set, only this topic (and its subtopics/items) is copied. */
+  topicId?: string;
+}): Promise<void> {
+  const { targetTaskId, sourceTaskId, topicId } = params;
+  if (targetTaskId === sourceTaskId) {
+    throw new Error("Selecione outra tarefa como origem");
+  }
+
+  const source = await fetchTeamTaskChecklist(sourceTaskId);
+  const topics = source.sections
+    .filter((s) => !s.parent_id)
+    .filter((s) => (topicId ? s.id === topicId : true))
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  if (topics.length === 0) {
+    throw new Error("Nenhum tópico encontrado para importar");
+  }
+
+  const { data: maxTopic } = await supabase
+    .from("team_task_checklist_sections")
+    .select("sort_order")
+    .eq("team_task_id", targetTaskId)
+    .is("parent_id", null)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let nextTopicOrder = (maxTopic?.sort_order ?? -1) + 1;
+
+  for (const topic of topics) {
+    const { data: newTopic, error: topicErr } = await supabase
+      .from("team_task_checklist_sections")
+      .insert({
+        team_task_id: targetTaskId,
+        parent_id: null,
+        title: topic.title,
+        sort_order: nextTopicOrder++,
+      })
+      .select()
+      .single();
+    if (topicErr) throw topicErr;
+
+    const topicItems = source.items
+      .filter((i) => i.section_id === topic.id)
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    if (topicItems.length > 0) {
+      const { error: itemsErr } = await supabase
+        .from("team_task_checklist_items")
+        .insert(
+          topicItems.map((item, index) => ({
+            team_task_id: targetTaskId,
+            section_id: newTopic.id,
+            label: item.label,
+            is_completed: false,
+            sort_order: index,
+          }))
+        );
+      if (itemsErr) throw itemsErr;
+    }
+
+    const subtopics = source.sections
+      .filter((s) => s.parent_id === topic.id)
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    for (let sIdx = 0; sIdx < subtopics.length; sIdx++) {
+      const sub = subtopics[sIdx];
+      const { data: newSub, error: subErr } = await supabase
+        .from("team_task_checklist_sections")
+        .insert({
+          team_task_id: targetTaskId,
+          parent_id: newTopic.id,
+          title: sub.title,
+          sort_order: sIdx,
+        })
+        .select()
+        .single();
+      if (subErr) throw subErr;
+
+      const subItems = source.items
+        .filter((i) => i.section_id === sub.id)
+        .sort((a, b) => a.sort_order - b.sort_order);
+
+      if (subItems.length > 0) {
+        const { error: subItemsErr } = await supabase
+          .from("team_task_checklist_items")
+          .insert(
+            subItems.map((item, index) => ({
+              team_task_id: targetTaskId,
+              section_id: newSub.id,
+              label: item.label,
+              is_completed: false,
+              sort_order: index,
+            }))
+          );
+        if (subItemsErr) throw subItemsErr;
+      }
+    }
+  }
+}
+
 export async function createTeamChecklistItem(params: {
   teamTaskId: string;
   sectionId: string;
@@ -705,6 +809,39 @@ export async function createTeamChecklistItem(params: {
     .single();
   if (error) throw error;
   return data as TeamChecklistItem;
+}
+
+export async function createTeamChecklistItemsBulk(params: {
+  teamTaskId: string;
+  sectionId: string;
+  labels: string[];
+}): Promise<TeamChecklistItem[]> {
+  const labels = params.labels.map((l) => l.trim()).filter(Boolean);
+  if (labels.length === 0) return [];
+
+  const { data: max } = await supabase
+    .from("team_task_checklist_items")
+    .select("sort_order")
+    .eq("section_id", params.sectionId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const start = (max?.sort_order ?? -1) + 1;
+  const { data, error } = await supabase
+    .from("team_task_checklist_items")
+    .insert(
+      labels.map((label, index) => ({
+        team_task_id: params.teamTaskId,
+        section_id: params.sectionId,
+        label,
+        is_completed: false,
+        sort_order: start + index,
+      }))
+    )
+    .select();
+  if (error) throw error;
+  return (data as TeamChecklistItem[]) ?? [];
 }
 
 export async function toggleTeamChecklistItem(

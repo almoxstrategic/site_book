@@ -13,8 +13,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ChecklistEditor } from "@/components/checklist/checklist-editor";
+import { ImportTeamChecklistDialog } from "@/components/team/import-team-checklist-dialog";
 import {
   createTeamChecklistItem,
+  createTeamChecklistItemsBulk,
   createTeamChecklistSection,
   deleteTeamChecklistItem,
   deleteTeamChecklistSection,
@@ -43,6 +45,7 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   useEffect(() => {
     if (task) {
@@ -100,6 +103,20 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
     mutationFn: createTeamChecklistItem,
     onSuccess: invalidateChecklist,
     onError: (e: Error) => toast.error(e.message || "Erro ao criar tarefa"),
+  });
+
+  const bulkAddItems = useMutation({
+    mutationFn: createTeamChecklistItemsBulk,
+    onSuccess: (created) => {
+      invalidateChecklist();
+      toast.success(
+        created.length === 1
+          ? "1 tarefa adicionada"
+          : `${created.length} tarefas adicionadas`
+      );
+    },
+    onError: (e: Error) =>
+      toast.error(e.message || "Erro ao adicionar tarefas em lote"),
   });
 
   const toggleItem = useMutation({
@@ -198,10 +215,12 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
   const pending =
     addSection.isPending ||
     addItem.isPending ||
+    bulkAddItems.isPending ||
     removeSection.isPending ||
     removeItem.isPending;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showClose={false}
@@ -279,6 +298,7 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
                 sections={checklist?.sections ?? []}
                 items={checklist?.items ?? []}
                 pending={pending}
+                onImportClick={() => setImportOpen(true)}
                 handlers={{
                   onAddTopic: (sectionTitle) =>
                     addSection.mutate({
@@ -305,6 +325,12 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
                       sectionId,
                       label,
                     }),
+                  onBulkAddItems: (sectionId, labels) =>
+                    bulkAddItems.mutate({
+                      teamTaskId: task.id,
+                      sectionId,
+                      labels,
+                    }),
                   onToggleItem: (itemId, isCompleted) =>
                     toggleItem.mutate({ id: itemId, isCompleted }),
                   onRenameItem: (itemId, label) =>
@@ -317,5 +343,13 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
         </div>
       </DialogContent>
     </Dialog>
+
+    <ImportTeamChecklistDialog
+      open={importOpen}
+      onOpenChange={setImportOpen}
+      targetTaskId={task.id}
+      onImported={invalidateChecklist}
+    />
+    </>
   );
 }
