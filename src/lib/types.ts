@@ -121,3 +121,10 @@ export type TeamChecklistItem = {
   sort_order: number;
   created_at: string;
 };
+
+export type TeamTaskHistory = {
+  id: string;
+  team_task_id: string;
+  action_description: string;
+  created_at: string;
+};

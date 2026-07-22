@@ -12,6 +12,7 @@ import {
   type TeamTaskStatus,
   type TeamChecklistSection,
   type TeamChecklistItem,
+  type TeamTaskHistory,
 } from "@/lib/types";
 
 export async function fetchColumns(): Promise<Column[]> {
@@ -846,7 +847,8 @@ export async function createTeamChecklistItemsBulk(params: {
 
 export async function toggleTeamChecklistItem(
   id: string,
-  isCompleted: boolean
+  isCompleted: boolean,
+  opts?: { teamTaskId: string; label: string }
 ): Promise<TeamChecklistItem> {
   const { data, error } = await supabase
     .from("team_task_checklist_items")
@@ -855,7 +857,33 @@ export async function toggleTeamChecklistItem(
     .select()
     .single();
   if (error) throw error;
+
+  if (isCompleted && opts) {
+    const label = opts.label.trim() || "Tarefa";
+    const { error: historyError } = await supabase
+      .from("team_task_history")
+      .insert({
+        team_task_id: opts.teamTaskId,
+        action_description: `${label} marcado como feito`,
+      });
+    if (historyError) {
+      console.error("Failed to log team task history:", historyError);
+    }
+  }
+
   return data as TeamChecklistItem;
+}
+
+export async function fetchTeamTaskHistory(
+  teamTaskId: string
+): Promise<TeamTaskHistory[]> {
+  const { data, error } = await supabase
+    .from("team_task_history")
+    .select("*")
+    .eq("team_task_id", teamTaskId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as TeamTaskHistory[]) ?? [];
 }
 
 export async function updateTeamChecklistItemLabel(

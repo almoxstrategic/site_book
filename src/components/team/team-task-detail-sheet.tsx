@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { ChecklistEditor } from "@/components/checklist/checklist-editor";
 import { ImportTeamChecklistDialog } from "@/components/team/import-team-checklist-dialog";
+import { TeamTaskHistoryPanel } from "@/components/team/team-task-history-panel";
 import {
   createTeamChecklistItem,
   createTeamChecklistItemsBulk,
@@ -21,6 +22,7 @@ import {
   deleteTeamChecklistItem,
   deleteTeamChecklistSection,
   fetchTeamTaskChecklist,
+  fetchTeamTaskHistory,
   toggleTeamChecklistItem,
   updateTeamChecklistItemLabel,
   updateTeamChecklistSection,
@@ -39,6 +41,9 @@ type Props = {
 
 const checklistKey = (taskId: string) =>
   ["team-task-checklist", taskId] as const;
+
+const historyKey = (taskId: string) =>
+  ["team-task-history", taskId] as const;
 
 export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
   const qc = useQueryClient();
@@ -61,10 +66,21 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
     enabled: !!task && open,
   });
 
+  const { data: history = [], isLoading: historyLoading } = useQuery({
+    queryKey: task ? historyKey(task.id) : ["team-task-history", "none"],
+    queryFn: () => fetchTeamTaskHistory(task!.id),
+    enabled: !!task && open,
+  });
+
   function invalidateChecklist() {
     if (!task) return;
     qc.invalidateQueries({ queryKey: checklistKey(task.id) });
     qc.invalidateQueries({ queryKey: ["team-checklist-progress"] });
+  }
+
+  function invalidateHistory() {
+    if (!task) return;
+    qc.invalidateQueries({ queryKey: historyKey(task.id) });
   }
 
   function invalidateTasks() {
@@ -123,10 +139,16 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
     mutationFn: ({
       id,
       isCompleted,
+      label,
     }: {
       id: string;
       isCompleted: boolean;
-    }) => toggleTeamChecklistItem(id, isCompleted),
+      label: string;
+    }) =>
+      toggleTeamChecklistItem(id, isCompleted, {
+        teamTaskId: task!.id,
+        label,
+      }),
     onMutate: async ({ id, isCompleted }) => {
       if (!task) return;
       await qc.cancelQueries({ queryKey: checklistKey(task.id) });
@@ -179,6 +201,9 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
       }
       toast.error(e.message || "Erro ao atualizar item");
     },
+    onSuccess: (_data, variables) => {
+      if (variables.isCompleted) invalidateHistory();
+    },
     onSettled: invalidateChecklist,
   });
 
@@ -221,136 +246,155 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showClose={false}
-        className="flex h-[min(92vh,780px)] w-[min(96vw,720px)] max-w-none flex-col gap-0 overflow-hidden border-slate-200 p-0 sm:rounded-xl"
-      >
-        <DialogTitle className="sr-only">{task.title}</DialogTitle>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          showClose={false}
+          className="flex h-[min(92vh,820px)] w-[min(96vw,1100px)] max-w-5xl flex-col gap-0 overflow-hidden border-slate-200 p-0 sm:rounded-xl"
+        >
+          <DialogTitle className="sr-only">{task.title}</DialogTitle>
 
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
-          <span className="rounded-md bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
-            {TEAM_TASK_STATUS_LABELS[task.status]}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            type="button"
-            onClick={() => onOpenChange(false)}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {editingTitle ? (
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={saveTitle}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveTitle();
-                }
-                if (e.key === "Escape") {
-                  setTitle(task.title);
-                  setEditingTitle(false);
-                }
-              }}
-              className="mb-2 border-teal-300 font-semibold text-xl tracking-tight"
-              autoFocus
-            />
-          ) : (
-            <button
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
+            <span className="rounded-md bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-700">
+              {TEAM_TASK_STATUS_LABELS[task.status]}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
               type="button"
-              onClick={() => setEditingTitle(true)}
-              className="mb-2 w-full rounded-md px-1 py-0.5 text-left text-xl font-semibold tracking-tight text-slate-900 hover:bg-slate-50"
-              title="Clique para editar o título"
+              onClick={() => onOpenChange(false)}
             >
-              {title}
-            </button>
-          )}
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
 
-          <section className="mb-8">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <List className="h-4 w-4 text-slate-500" />
-              Descrição
-            </div>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={saveDescription}
-              placeholder="Adicione uma descrição mais detalhada..."
-              className="min-h-[88px] resize-y border-slate-200 bg-slate-50/80 text-sm shadow-none focus-visible:bg-white"
-            />
-          </section>
+          <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-3">
+            <div className="min-h-0 overflow-y-auto px-6 py-5 md:col-span-2">
+              {editingTitle ? (
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={saveTitle}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      saveTitle();
+                    }
+                    if (e.key === "Escape") {
+                      setTitle(task.title);
+                      setEditingTitle(false);
+                    }
+                  }}
+                  className="mb-2 border-teal-300 font-semibold text-xl tracking-tight"
+                  autoFocus
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingTitle(true)}
+                  className="mb-2 w-full rounded-md px-1 py-0.5 text-left text-xl font-semibold tracking-tight text-slate-900 hover:bg-slate-50"
+                  title="Clique para editar o título"
+                >
+                  {title}
+                </button>
+              )}
 
-          <section>
-            <div className="mb-4 text-sm font-semibold text-slate-800">
-              Checklist
+              <section className="mb-8">
+                <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                  <List className="h-4 w-4 text-slate-500" />
+                  Descrição
+                </div>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  onBlur={saveDescription}
+                  placeholder="Adicione uma descrição mais detalhada..."
+                  className="min-h-[88px] resize-y border-slate-200 bg-slate-50/80 text-sm shadow-none focus-visible:bg-white"
+                />
+              </section>
+
+              <section>
+                <div className="mb-4 text-sm font-semibold text-slate-800">
+                  Checklist
+                </div>
+                {isLoading ? (
+                  <p className="text-sm text-slate-500">
+                    Carregando checklist…
+                  </p>
+                ) : (
+                  <ChecklistEditor
+                    key={task.id}
+                    sections={checklist?.sections ?? []}
+                    items={checklist?.items ?? []}
+                    pending={pending}
+                    onImportClick={() => setImportOpen(true)}
+                    handlers={{
+                      onAddTopic: (sectionTitle) =>
+                        addSection.mutate({
+                          teamTaskId: task.id,
+                          title: sectionTitle,
+                          parentId: null,
+                        }),
+                      onAddSubtopic: (topicId, sectionTitle) =>
+                        addSection.mutate({
+                          teamTaskId: task.id,
+                          title: sectionTitle,
+                          parentId: topicId,
+                        }),
+                      onRenameSection: (sectionId, sectionTitle) =>
+                        renameSection.mutate({
+                          id: sectionId,
+                          title: sectionTitle,
+                        }),
+                      onDeleteSection: (sectionId) =>
+                        removeSection.mutate(sectionId),
+                      onAddItem: (sectionId, label) =>
+                        addItem.mutate({
+                          teamTaskId: task.id,
+                          sectionId,
+                          label,
+                        }),
+                      onBulkAddItems: (sectionId, labels) =>
+                        bulkAddItems.mutate({
+                          teamTaskId: task.id,
+                          sectionId,
+                          labels,
+                        }),
+                      onToggleItem: (itemId, isCompleted) => {
+                        const item = checklist?.items.find(
+                          (i) => i.id === itemId
+                        );
+                        toggleItem.mutate({
+                          id: itemId,
+                          isCompleted,
+                          label: item?.label ?? "Tarefa",
+                        });
+                      },
+                      onRenameItem: (itemId, label) =>
+                        renameItem.mutate({ id: itemId, label }),
+                      onDeleteItem: (itemId) => removeItem.mutate(itemId),
+                    }}
+                  />
+                )}
+              </section>
             </div>
-            {isLoading ? (
-              <p className="text-sm text-slate-500">Carregando checklist…</p>
-            ) : (
-              <ChecklistEditor
-                key={task.id}
-                sections={checklist?.sections ?? []}
-                items={checklist?.items ?? []}
-                pending={pending}
-                onImportClick={() => setImportOpen(true)}
-                handlers={{
-                  onAddTopic: (sectionTitle) =>
-                    addSection.mutate({
-                      teamTaskId: task.id,
-                      title: sectionTitle,
-                      parentId: null,
-                    }),
-                  onAddSubtopic: (topicId, sectionTitle) =>
-                    addSection.mutate({
-                      teamTaskId: task.id,
-                      title: sectionTitle,
-                      parentId: topicId,
-                    }),
-                  onRenameSection: (sectionId, sectionTitle) =>
-                    renameSection.mutate({
-                      id: sectionId,
-                      title: sectionTitle,
-                    }),
-                  onDeleteSection: (sectionId) =>
-                    removeSection.mutate(sectionId),
-                  onAddItem: (sectionId, label) =>
-                    addItem.mutate({
-                      teamTaskId: task.id,
-                      sectionId,
-                      label,
-                    }),
-                  onBulkAddItems: (sectionId, labels) =>
-                    bulkAddItems.mutate({
-                      teamTaskId: task.id,
-                      sectionId,
-                      labels,
-                    }),
-                  onToggleItem: (itemId, isCompleted) =>
-                    toggleItem.mutate({ id: itemId, isCompleted }),
-                  onRenameItem: (itemId, label) =>
-                    renameItem.mutate({ id: itemId, label }),
-                  onDeleteItem: (itemId) => removeItem.mutate(itemId),
-                }}
+
+            <aside className="min-h-0 border-t border-slate-100 bg-muted/30 px-4 py-4 md:border-l md:border-t-0">
+              <TeamTaskHistoryPanel
+                entries={history}
+                isLoading={historyLoading}
               />
-            )}
-          </section>
-        </div>
-      </DialogContent>
-    </Dialog>
+            </aside>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-    <ImportTeamChecklistDialog
-      open={importOpen}
-      onOpenChange={setImportOpen}
-      targetTaskId={task.id}
-      onImported={invalidateChecklist}
-    />
+      <ImportTeamChecklistDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        targetTaskId={task.id}
+        onImported={invalidateChecklist}
+      />
     </>
   );
 }
