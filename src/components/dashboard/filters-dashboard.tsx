@@ -76,6 +76,9 @@ type SiteCrossRow = {
   task2Label: string;
   task2Item: CardChecklistItem | null;
   task2Completed: boolean;
+  task3Label: string | null;
+  task3Item: CardChecklistItem | null;
+  task3Completed: boolean | null;
 };
 
 function statusLabel(isCompleted: boolean) {
@@ -88,16 +91,17 @@ function TaskCombobox({
   onChange,
   mode,
   taskOptions,
-  excludeValue,
+  excludeValues = [],
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   mode: "primary" | "secondary";
   taskOptions: string[];
-  excludeValue?: string;
+  excludeValues?: string[];
 }) {
   const [open, setOpen] = useState(false);
+  const excluded = new Set(excludeValues.filter(Boolean));
 
   const display =
     value === ALL_TASKS
@@ -165,7 +169,7 @@ function TaskCombobox({
               </CommandGroup>
               <CommandGroup heading="Tarefas">
                 {taskOptions
-                  .filter((item) => item !== excludeValue)
+                  .filter((item) => !excluded.has(item))
                   .map((itemLabel) => (
                     <CommandItem
                       key={itemLabel}
@@ -234,6 +238,8 @@ export function FiltersDashboard() {
   const [status1, setStatus1] = useState<FilterStatus | "all">(DEFAULT_STATUS);
   const [task2, setTask2] = useState<string>(NO_TASK);
   const [status2, setStatus2] = useState<FilterStatus>("pending");
+  const [task3, setTask3] = useState<string>(NO_TASK);
+  const [status3, setStatus3] = useState<FilterStatus>("pending");
   const [showSecondFilter, setShowSecondFilter] = useState(false);
   const [siteOpen, setSiteOpen] = useState(false);
 
@@ -322,6 +328,7 @@ export function FiltersDashboard() {
 
   const task1Specific = task1 !== ALL_TASKS && task1 !== NO_TASK;
   const task2Active = task2 !== NO_TASK;
+  const task3Active = task3 !== NO_TASK;
   const isCrossMode = showSecondFilter && task1Specific && task2Active;
 
   const checklistRows = useMemo(() => {
@@ -396,6 +403,7 @@ export function FiltersDashboard() {
 
     const wanted1 = status1 === "completed";
     const wanted2 = status2 === "completed";
+    const wanted3 = status3 === "completed";
     const result: SiteCrossRow[] = [];
 
     for (const card of sortedCards) {
@@ -416,6 +424,12 @@ export function FiltersDashboard() {
       const item2 = items.find((i) => checklistItemLabel(i) === task2) ?? null;
       if (!item2 || item2.is_completed !== wanted2) continue;
 
+      let item3: CardChecklistItem | null = null;
+      if (task3Active) {
+        item3 = items.find((i) => checklistItemLabel(i) === task3) ?? null;
+        if (!item3 || item3.is_completed !== wanted3) continue;
+      }
+
       result.push({
         cardId: card.id,
         siteName: card.title || card.id,
@@ -428,6 +442,9 @@ export function FiltersDashboard() {
         task2Label: task2,
         task2Item: item2,
         task2Completed: item2.is_completed,
+        task3Label: task3Active ? task3 : null,
+        task3Item: item3,
+        task3Completed: task3Active && item3 ? item3.is_completed : null,
       });
     }
 
@@ -442,8 +459,11 @@ export function FiltersDashboard() {
     checklistByCard,
     task1,
     task2,
+    task3,
+    task3Active,
     status1,
     status2,
+    status3,
     columnNameById,
   ]);
 
@@ -459,8 +479,10 @@ export function FiltersDashboard() {
     attributeFilter !== ALL_ATTRIBUTES ||
     task1Specific ||
     task2Active ||
+    task3Active ||
     status1 !== DEFAULT_STATUS ||
     status2 !== "pending" ||
+    status3 !== "pending" ||
     showSecondFilter;
 
   const resultCount = isCrossMode ? crossRows.length : checklistRows.length;
@@ -474,18 +496,28 @@ export function FiltersDashboard() {
     setStatus1(DEFAULT_STATUS);
     setTask2(NO_TASK);
     setStatus2("pending");
+    setTask3(NO_TASK);
+    setStatus3("pending");
     setShowSecondFilter(false);
   }
 
   function handleTask1Change(value: string) {
     setTask1(value);
     if (value === task2) setTask2(NO_TASK);
+    if (value === task3) setTask3(NO_TASK);
   }
 
-  function removeSecondFilter() {
+  function handleTask2Change(value: string) {
+    setTask2(value);
+    if (value === task3) setTask3(NO_TASK);
+  }
+
+  function removeCrossFilters() {
     setShowSecondFilter(false);
     setTask2(NO_TASK);
     setStatus2("pending");
+    setTask3(NO_TASK);
+    setStatus3("pending");
   }
 
   async function copySites() {
@@ -495,7 +527,14 @@ export function FiltersDashboard() {
     }
 
     if (isCrossMode) {
-      const header = `${task1} - ${statusLabel(status1 === "completed")} AND ${task2} - ${statusLabel(status2 === "completed")}`;
+      const parts = [
+        `${task1} - ${statusLabel(status1 === "completed")}`,
+        `${task2} - ${statusLabel(status2 === "completed")}`,
+      ];
+      if (task3Active) {
+        parts.push(`${task3} - ${statusLabel(status3 === "completed")}`);
+      }
+      const header = parts.join(" AND ");
       const text = `${header}\n${crossRows.map((r) => r.siteName).join("\n")}`;
       try {
         await navigator.clipboard.writeText(text);
@@ -544,6 +583,8 @@ export function FiltersDashboard() {
             task1Completed: row.task1Completed,
             task2Label: row.task2Label,
             task2Completed: row.task2Completed,
+            task3Label: row.task3Label,
+            task3Completed: row.task3Completed,
           }))
         );
       } else {
@@ -713,7 +754,10 @@ export function FiltersDashboard() {
             onChange={handleTask1Change}
             mode="primary"
             taskOptions={taskOptions}
-            excludeValue={task2Active ? task2 : undefined}
+            excludeValues={[
+              ...(task2Active ? [task2] : []),
+              ...(task3Active ? [task3] : []),
+            ]}
           />
 
           <div className="space-y-2">
@@ -746,10 +790,13 @@ export function FiltersDashboard() {
               <TaskCombobox
                 label="Tarefa 2"
                 value={task2}
-                onChange={setTask2}
+                onChange={handleTask2Change}
                 mode="secondary"
                 taskOptions={taskOptions}
-                excludeValue={task1Specific ? task1 : undefined}
+                excludeValues={[
+                  ...(task1Specific ? [task1] : []),
+                  ...(task3Active ? [task3] : []),
+                ]}
               />
               <div className="space-y-2">
                 <Label>Status 2</Label>
@@ -757,6 +804,36 @@ export function FiltersDashboard() {
                   value={status2}
                   onValueChange={(v) => setStatus2(v as FilterStatus)}
                   disabled={!task2Active}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="completed">Feito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 xl:items-end">
+              <div className="hidden 2xl:col-span-4 2xl:block" />
+              <TaskCombobox
+                label="Tarefa 3"
+                value={task3}
+                onChange={setTask3}
+                mode="secondary"
+                taskOptions={taskOptions}
+                excludeValues={[
+                  ...(task1Specific ? [task1] : []),
+                  ...(task2Active ? [task2] : []),
+                ]}
+              />
+              <div className="space-y-2">
+                <Label>Status 3</Label>
+                <Select
+                  value={status3}
+                  onValueChange={(v) => setStatus3(v as FilterStatus)}
+                  disabled={!task3Active}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -792,7 +869,7 @@ export function FiltersDashboard() {
               variant="ghost"
               size="sm"
               className="h-8 gap-1.5 px-2 text-slate-600 hover:bg-slate-100"
-              onClick={removeSecondFilter}
+              onClick={removeCrossFilters}
             >
               <X className="h-3.5 w-3.5" />
               Remover filtro cruzado
@@ -801,8 +878,10 @@ export function FiltersDashboard() {
           {showSecondFilter && (
             <p className="text-xs text-slate-500">
               {isCrossMode
-                ? "Filtro cruzado (AND) ativo: cada linha é um site que satisfaz as duas condições."
-                : "Selecione Tarefa 1 e Tarefa 2 específicas para aplicar o cruzamento."}
+                ? task3Active
+                  ? "Filtro cruzado (AND) ativo: cada linha é um site que satisfaz as três condições."
+                  : "Filtro cruzado (AND) ativo: cada linha é um site que satisfaz as duas condições. Tarefa 3 é opcional."
+                : "Selecione Tarefa 1 e Tarefa 2 específicas para aplicar o cruzamento. Tarefa 3 é opcional."}
             </p>
           )}
         </div>
@@ -846,7 +925,12 @@ export function FiltersDashboard() {
 
         <div className="flex-1 overflow-x-auto">
           {isCrossMode ? (
-            <table className="w-full min-w-[800px] text-left text-sm">
+            <table
+              className={cn(
+                "w-full text-left text-sm",
+                task3Active ? "min-w-[1000px]" : "min-w-[800px]"
+              )}
+            >
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-[0_1px_0_0_rgb(241_245_249)]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Nome do Site</th>
@@ -857,16 +941,22 @@ export function FiltersDashboard() {
                   <th className="px-4 py-3 font-medium">Status 1</th>
                   <th className="px-4 py-3 font-medium">Tarefa 2</th>
                   <th className="px-4 py-3 font-medium">Status 2</th>
+                  {task3Active && (
+                    <>
+                      <th className="px-4 py-3 font-medium">Tarefa 3</th>
+                      <th className="px-4 py-3 font-medium">Status 3</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {crossRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={task3Active ? 10 : 8}
                       className="px-4 py-10 text-center text-slate-400"
                     >
-                      Nenhum site atende às duas condições ao mesmo tempo.
+                      Nenhum site atende às condições ao mesmo tempo.
                     </td>
                   </tr>
                 )}
@@ -913,6 +1003,25 @@ export function FiltersDashboard() {
                         }}
                       />
                     </td>
+                    {task3Active && (
+                      <>
+                        <td className="px-4 py-3 text-slate-600">
+                          {row.task3Label}
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusCell
+                            item={row.task3Item}
+                            onToggle={(checked) => {
+                              if (!row.task3Item) return;
+                              setChecklist.mutate({
+                                itemId: row.task3Item.id,
+                                isCompleted: checked,
+                              });
+                            }}
+                          />
+                        </td>
+                      </>
+                    )}
                   </tr>
                 ))}
               </tbody>

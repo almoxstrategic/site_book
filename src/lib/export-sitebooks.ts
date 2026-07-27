@@ -104,6 +104,8 @@ export type CrossFilteredReportRow = {
   task1Completed: boolean;
   task2Label: string | null;
   task2Completed: boolean | null;
+  task3Label?: string | null;
+  task3Completed?: boolean | null;
 };
 
 /** Exports site-level cross-filtered Relatórios rows with dynamic task columns. */
@@ -111,8 +113,9 @@ export function exportCrossFilteredReportToExcel(
   rows: CrossFilteredReportRow[]
 ) {
   const hasTask2 = rows.some((r) => r.task2Label);
+  const hasTask3 = rows.some((r) => r.task3Label);
 
-  const header = hasTask2
+  const header = hasTask3
     ? [
         "Nome do Site",
         "UF",
@@ -122,10 +125,48 @@ export function exportCrossFilteredReportToExcel(
         "Status 1",
         "Tarefa 2",
         "Status 2",
+        "Tarefa 3",
+        "Status 3",
       ]
-    : ["Nome do Site", "UF", "Posição", "ATRIBUTOS", "Tarefa", "Status"];
+    : hasTask2
+      ? [
+          "Nome do Site",
+          "UF",
+          "Posição",
+          "ATRIBUTOS",
+          "Tarefa 1",
+          "Status 1",
+          "Tarefa 2",
+          "Status 2",
+        ]
+      : ["Nome do Site", "UF", "Posição", "ATRIBUTOS", "Tarefa", "Status"];
 
   const data = rows.map((row) => {
+    if (hasTask3) {
+      return {
+        "Nome do Site": row.siteName,
+        UF: row.uf,
+        Posição: row.columnName,
+        ATRIBUTOS: row.atributos,
+        "Tarefa 1": row.task1Label,
+        "Status 1": row.task1Completed ? "Feito" : "Pendente",
+        "Tarefa 2": row.task2Label ?? "—",
+        "Status 2":
+          row.task2Completed === null
+            ? "—"
+            : row.task2Completed
+              ? "Feito"
+              : "Pendente",
+        "Tarefa 3": row.task3Label ?? "—",
+        "Status 3":
+          row.task3Completed === null || row.task3Completed === undefined
+            ? "—"
+            : row.task3Completed
+              ? "Feito"
+              : "Pendente",
+      };
+    }
+
     if (hasTask2) {
       return {
         "Nome do Site": row.siteName,
