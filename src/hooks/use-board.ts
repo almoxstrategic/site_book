@@ -464,7 +464,9 @@ export function useBoardMutations() {
       }
     },
     onError: (e: Error) =>
-      toast.error(e.message || "Erro ao adicionar checklists padrão"),
+      toast.error(
+        e.message || "Erro ao adicionar checklists padrão"
+      ),
   });
 
   return {

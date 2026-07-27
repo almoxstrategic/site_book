@@ -1,43 +1,7 @@
-/** Default checklist used by "Adicionar Checklists Padrão" and Relatórios filters. */
-export const DEFAULT_CHECKLIST: {
-  category: string;
-  items: string[];
-}[] = [
-  {
-    category: "ART",
-    items: [
-      "1.3 - ART de Execução Civil",
-      "1.4 - ART de Execução Elétrica",
-      "1.8 - ART de Montagem Estrutura Metálica",
-      "1.11 - ART de Aterramento",
-      "1.12 - ART de Instalação",
-      "1.13 - ART do Ensaio de Resistência do Concreto",
-      "1.12 - ART de Verticalidade",
-    ],
-  },
-  {
-    category: "Laudo/Certificado/As-Build",
-    items: [
-      "3.1 - Carta Início de Obra",
-      "3.2 - Cronograma de Obra",
-      "3.3 - Template de Energia",
-      "4.3 - As-Built",
-      "5.2 - Certificado de Garantia da Implantação Civil",
-      "5.3 - Certificados Galvanização",
-      "6.1 - Laudo do Ensaio de Resistência do Concreto",
-      "6.2 - Laudo de Verticalidade",
-      "6.3 - Laudo de Aterramento (com medição)",
-    ],
-  },
-  {
-    category: "Etapa final",
-    items: [
-      "7.1 - Relatório Final - RFI",
-      "ENVIO DO SITEBOOK",
-      "STATUS DE ACEITAÇÃO",
-    ],
-  },
-];
+import { COMPANY_CHECKLIST_TEMPLATES } from "@/lib/checklist-templates";
+
+/** Legacy Global defaults (Relatórios/export). Runtime seeding uses Supabase. */
+export const DEFAULT_CHECKLIST = COMPANY_CHECKLIST_TEMPLATES.global;
 
 export const VALID_TASK_LABELS = new Set(
   DEFAULT_CHECKLIST.flatMap((group) => group.items)

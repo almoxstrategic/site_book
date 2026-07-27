@@ -1,16 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import {
   Bell,
   BookOpen,
   Columns3,
   LayoutDashboard,
+  ListTodo,
   MessageSquare,
   Users,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { FiltersDashboard } from "@/components/dashboard/filters-dashboard";
 import { CommentsSearchView } from "@/components/comments/comments-search-view";
@@ -19,6 +22,7 @@ import {
   dueRemindersCountKey,
   RemindersView,
 } from "@/components/reminders/reminders-view";
+import { DefineChecklistDialog } from "@/components/checklist/define-checklist-dialog";
 import { SitesTotalCard } from "@/components/dashboard/sites-total-card";
 import { SelectedCardProvider } from "@/hooks/use-selected-card";
 import { useCompany } from "@/hooks/use-company";
@@ -26,6 +30,7 @@ import { fetchDueRemindersCount } from "@/lib/api";
 
 export default function CompanyHomePage() {
   const { company } = useCompany();
+  const [defineChecklistOpen, setDefineChecklistOpen] = useState(false);
 
   const { data: dueCount = 0 } = useQuery({
     queryKey: dueRemindersCountKey(),
@@ -84,7 +89,17 @@ export default function CompanyHomePage() {
               <MessageSquare className="h-4 w-4" />
               Pesquisar Comentários
             </TabsTrigger>
-            <TabsTrigger value="reminders" className="relative ml-auto gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-10 gap-2 rounded-md px-4 text-sm font-medium text-slate-600 hover:bg-white hover:text-teal-800 hover:shadow-sm"
+              onClick={() => setDefineChecklistOpen(true)}
+            >
+              <ListTodo className="h-4 w-4" />
+              Definir Check list
+            </Button>
+            <TabsTrigger value="reminders" className="relative gap-2">
               <Bell className="h-4 w-4" />
               Lembretes
               {hasDueReminders && (
@@ -136,6 +151,11 @@ export default function CompanyHomePage() {
             <TeamKanbanView />
           </TabsContent>
         </Tabs>
+
+        <DefineChecklistDialog
+          open={defineChecklistOpen}
+          onOpenChange={setDefineChecklistOpen}
+        />
       </SelectedCardProvider>
     </div>
   );

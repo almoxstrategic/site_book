@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
-import { DEFAULT_CHECKLIST, checklistItemLabel } from "@/lib/checklist-defaults";
+import { checklistItemLabel } from "@/lib/checklist-defaults";
+import type { ChecklistTemplateGroup } from "@/lib/checklist-templates";
 import { getCompanySlug } from "@/lib/company-scope";
 import {
   extractSiteState,
@@ -381,20 +382,100 @@ export async function deleteChecklistItem(itemId: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function fetchCompanyDefaultChecklist(
+  companySlug?: string
+): Promise<ChecklistTemplateGroup[]> {
+  const slug = companySlug ?? getCompanySlug();
+  const { data, error } = await supabase
+    .from("company_checklist_templates")
+    .select("category_name, item_name, category_sort, item_sort")
+    .eq("company_slug", slug)
+    .order("category_sort", { ascending: true })
+    .order("item_sort", { ascending: true });
+  if (error) throw error;
+
+  const groups = new Map<string, ChecklistTemplateGroup>();
+  const order: string[] = [];
+
+  for (const row of data ?? []) {
+    const category = row.category_name as string;
+    if (!groups.has(category)) {
+      groups.set(category, { category, items: [] });
+      order.push(category);
+    }
+    groups.get(category)!.items.push(row.item_name as string);
+  }
+
+  return order.map((name) => groups.get(name)!);
+}
+
+export async function saveCompanyDefaultChecklist(
+  groups: ChecklistTemplateGroup[],
+  companySlug?: string
+): Promise<void> {
+  const slug = companySlug ?? getCompanySlug();
+
+  const { error: deleteErr } = await supabase
+    .from("company_checklist_templates")
+    .delete()
+    .eq("company_slug", slug);
+  if (deleteErr) throw deleteErr;
+
+  const rows: {
+    company_slug: string;
+    category_name: string;
+    item_name: string;
+    category_sort: number;
+    item_sort: number;
+  }[] = [];
+
+  groups.forEach((group, categorySort) => {
+    const category = group.category.trim();
+    if (!category) return;
+    group.items.forEach((item, itemSort) => {
+      const itemName = item.trim();
+      if (!itemName) return;
+      rows.push({
+        company_slug: slug,
+        category_name: category,
+        item_name: itemName,
+        category_sort: categorySort,
+        item_sort: itemSort,
+      });
+    });
+  });
+
+  if (rows.length === 0) return;
+
+  const { error: insertErr } = await supabase
+    .from("company_checklist_templates")
+    .insert(rows);
+  if (insertErr) throw insertErr;
+}
+
 export async function seedDefaultChecklists(
   cardId: string
 ): Promise<{ items: CardChecklistItem[]; added: number }> {
+  const companySlug = getCompanySlug();
+  const templateToApply = await fetchCompanyDefaultChecklist(companySlug);
+
+  if (templateToApply.length === 0) {
+    throw new Error(
+      "Nenhum checklist padrão configurado para esta empresa"
+    );
+  }
+
   const { data: categories, error: catErr } = await supabase
     .from("checklist_categories")
     .select("*")
-    .eq("company_slug", getCompanySlug())
+    .eq("company_slug", companySlug)
     .order("sort_order", { ascending: true });
   if (catErr) throw catErr;
 
   const { data: templates, error: tmplErr } = await supabase
     .from("checklist_templates")
     .select("*")
-    .eq("company_slug", getCompanySlug())
+    .eq("company_slug", companySlug)
     .order("sort_order", { ascending: true });
   if (tmplErr) throw tmplErr;
 
@@ -408,7 +489,7 @@ export async function seedDefaultChecklists(
     catSort += 1;
     const { data, error } = await supabase
       .from("checklist_categories")
-      .insert({ name, sort_order: catSort, company_slug: getCompanySlug() })
+      .insert({ name, sort_order: catSort, company_slug: companySlug })
       .select()
       .single();
     if (error) throw error;
@@ -431,7 +512,7 @@ export async function seedDefaultChecklists(
         category_id: categoryId,
         label,
         sort_order: sortOrder,
-        company_slug: getCompanySlug(),
+        company_slug: companySlug,
       })
       .select()
       .single();
@@ -446,10 +527,13 @@ export async function seedDefaultChecklists(
     sort_order: number;
   }[] = [];
 
-  for (const group of DEFAULT_CHECKLIST) {
+  for (const group of templateToApply) {
     const category = await ensureCategory(group.category);
     for (let i = 0; i < group.items.length; i++) {
       const template = await ensureTemplate(category.id, group.items[i], i);
+      if (!template?.id) {
+        throw new Error(`Falha ao resolver template para "${group.items[i]}"`);
+      }
       resolved.push({
         template_id: template.id,
         category_id: category.id,
@@ -458,16 +542,27 @@ export async function seedDefaultChecklists(
     }
   }
 
-  // Replace this card's checklist with exactly the default structure
+  // Deduplicate by template_id (unique on card_id + template_id)
+  const uniqueByTemplate = new Map<
+    string,
+    { template_id: string; category_id: string; sort_order: number }
+  >();
+  for (const row of resolved) {
+    if (!row.template_id) continue;
+    if (!uniqueByTemplate.has(row.template_id)) {
+      uniqueByTemplate.set(row.template_id, row);
+    }
+  }
+  const uniqueResolved = [...uniqueByTemplate.values()];
+
   const { error: deleteErr } = await supabase
     .from("card_checklist_items")
     .delete()
     .eq("card_id", cardId)
-    .eq("company_slug", getCompanySlug());
+    .eq("company_slug", companySlug);
   if (deleteErr) throw deleteErr;
 
-  const companySlug = getCompanySlug();
-  const toInsert = resolved.map((r) => ({
+  const toUpsert = uniqueResolved.map((r) => ({
     card_id: cardId,
     template_id: r.template_id,
     category_id: r.category_id,
@@ -477,15 +572,19 @@ export async function seedDefaultChecklists(
     company_slug: companySlug,
   }));
 
-  const { error: insertErr } = await supabase
+  if (toUpsert.length === 0) {
+    return { items: [], added: 0 };
+  }
+
+  const { error: upsertErr } = await supabase
     .from("card_checklist_items")
-    .insert(toInsert);
-  if (insertErr) throw insertErr;
+    .upsert(toUpsert, { onConflict: "card_id,template_id" });
+  if (upsertErr) throw upsertErr;
 
   const items = await fetchChecklistItems().then((all) =>
     all.filter((i) => i.card_id === cardId)
   );
-  return { items, added: toInsert.length };
+  return { items, added: toUpsert.length };
 }
 
 export async function fetchTemplates(): Promise<ChecklistTemplate[]> {
