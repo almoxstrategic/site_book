@@ -42,7 +42,7 @@ export default function Home() {
               </span>
             </div>
             <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
-              Gestão de projetos
+              Gestão de Projetos - GLOBAL
             </h1>
             <p className="mt-0.5 max-w-xl text-xs text-slate-600 sm:text-sm">
               Kanban operacional e painel de filtros para acompanhar ARTs,
