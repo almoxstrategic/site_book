@@ -2,6 +2,7 @@ export type Column = {
   id: string;
   name: string;
   position: number;
+  company_slug?: string;
   created_at: string;
 };
 
@@ -31,6 +32,7 @@ export type Card = {
   state: string | null;
   column_id: string;
   position: number;
+  company_slug?: string;
   created_at: string;
   updated_at: string;
 };
@@ -149,6 +151,15 @@ export type SiteReminder = {
   description: string;
   reminder_date: string;
   is_completed: boolean;
+  company_slug?: string;
   created_at: string;
   cards?: Pick<Card, "id" | "title"> | null;
+};
+
+export type Company = {
+  id: string;
+  slug: string;
+  name: string;
+  logo_url: string | null;
+  created_at: string;
 };

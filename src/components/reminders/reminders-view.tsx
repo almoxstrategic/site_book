@@ -51,10 +51,15 @@ import {
   updateSiteReminder,
 } from "@/lib/api";
 import type { SiteReminder } from "@/lib/types";
+import { tryGetCompanySlug } from "@/lib/company-scope";
 import { cn } from "@/lib/utils";
 
-export const remindersQueryKey = ["site-reminders", "pending"] as const;
-export const dueRemindersCountKey = ["site-reminders", "due-count"] as const;
+const companyPart = () => tryGetCompanySlug() ?? "none";
+
+export const remindersQueryKey = () =>
+  ["site-reminders", "pending", companyPart()] as const;
+export const dueRemindersCountKey = () =>
+  ["site-reminders", "due-count", companyPart()] as const;
 
 function siteLabel(reminder: SiteReminder) {
   return reminder.cards?.title?.trim() || reminder.site_id;
@@ -246,8 +251,10 @@ export function RemindersView() {
   );
 
   const { data: reminders = [], isLoading } = useQuery({
-    queryKey: remindersQueryKey,
+    queryKey: remindersQueryKey(),
     queryFn: fetchPendingReminders,
+    enabled: !!tryGetCompanySlug(),
+    staleTime: 30_000,
   });
 
   const filteredReminders = useMemo(() => {
@@ -261,8 +268,8 @@ export function RemindersView() {
   }, [reminders, searchQuery]);
 
   function invalidateReminders() {
-    qc.invalidateQueries({ queryKey: remindersQueryKey });
-    qc.invalidateQueries({ queryKey: dueRemindersCountKey });
+    qc.invalidateQueries({ queryKey: remindersQueryKey() });
+    qc.invalidateQueries({ queryKey: dueRemindersCountKey() });
   }
 
   const createReminder = useMutation({
@@ -278,10 +285,10 @@ export function RemindersView() {
   const updateReminder = useMutation({
     mutationFn: updateSiteReminder,
     onMutate: async (vars) => {
-      await qc.cancelQueries({ queryKey: remindersQueryKey });
-      const previous = qc.getQueryData<SiteReminder[]>(remindersQueryKey);
+      await qc.cancelQueries({ queryKey: remindersQueryKey() });
+      const previous = qc.getQueryData<SiteReminder[]>(remindersQueryKey());
       const site = sites.find((s) => s.id === vars.siteId);
-      qc.setQueryData<SiteReminder[]>(remindersQueryKey, (old = []) =>
+      qc.setQueryData<SiteReminder[]>(remindersQueryKey(), (old = []) =>
         old
           .map((r) =>
             r.id === vars.id
@@ -301,7 +308,7 @@ export function RemindersView() {
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(remindersQueryKey, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(remindersQueryKey(), ctx.previous);
       toast.error(e.message || "Erro ao atualizar lembrete");
     },
     onSuccess: () => {
@@ -314,15 +321,15 @@ export function RemindersView() {
   const completeReminder = useMutation({
     mutationFn: completeSiteReminder,
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: remindersQueryKey });
-      const previous = qc.getQueryData<SiteReminder[]>(remindersQueryKey);
-      qc.setQueryData<SiteReminder[]>(remindersQueryKey, (old = []) =>
+      await qc.cancelQueries({ queryKey: remindersQueryKey() });
+      const previous = qc.getQueryData<SiteReminder[]>(remindersQueryKey());
+      qc.setQueryData<SiteReminder[]>(remindersQueryKey(), (old = []) =>
         old.filter((r) => r.id !== id)
       );
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(remindersQueryKey, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(remindersQueryKey(), ctx.previous);
       toast.error(e.message || "Erro ao concluir lembrete");
     },
     onSuccess: () => toast.success("Lembrete concluído"),
@@ -332,15 +339,15 @@ export function RemindersView() {
   const removeReminder = useMutation({
     mutationFn: deleteSiteReminder,
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: remindersQueryKey });
-      const previous = qc.getQueryData<SiteReminder[]>(remindersQueryKey);
-      qc.setQueryData<SiteReminder[]>(remindersQueryKey, (old = []) =>
+      await qc.cancelQueries({ queryKey: remindersQueryKey() });
+      const previous = qc.getQueryData<SiteReminder[]>(remindersQueryKey());
+      qc.setQueryData<SiteReminder[]>(remindersQueryKey(), (old = []) =>
         old.filter((r) => r.id !== id)
       );
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(remindersQueryKey, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(remindersQueryKey(), ctx.previous);
       toast.error(e.message || "Erro ao excluir lembrete");
     },
     onSuccess: () => toast.success("Lembrete excluído"),

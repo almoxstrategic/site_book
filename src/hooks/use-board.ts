@@ -28,26 +28,44 @@ import {
   updateComment,
 } from "@/lib/api";
 import { supabase } from "@/lib/supabase/client";
+import { tryGetCompanySlug } from "@/lib/company-scope";
 import type { CardChecklistItem, Column } from "@/lib/types";
+import { useCompany } from "@/hooks/use-company";
+
+const companyPart = () => tryGetCompanySlug() ?? "none";
 
 export const queryKeys = {
-  columns: ["columns"] as const,
-  cards: ["cards"] as const,
-  checklist: ["checklist"] as const,
-  templates: ["templates"] as const,
-  commentCounts: ["commentCounts"] as const,
-  comments: (cardId: string) => ["comments", cardId] as const,
+  get columns() {
+    return ["columns", companyPart()] as const;
+  },
+  get cards() {
+    return ["cards", companyPart()] as const;
+  },
+  get checklist() {
+    return ["checklist", companyPart()] as const;
+  },
+  get templates() {
+    return ["templates", companyPart()] as const;
+  },
+  get commentCounts() {
+    return ["commentCounts", companyPart()] as const;
+  },
+  comments: (cardId: string) =>
+    ["comments", companyPart(), cardId] as const,
   siteActivityHistory: (siteId: string) =>
-    ["site-activity-history", siteId] as const,
+    ["site-activity-history", companyPart(), siteId] as const,
 };
 
 /** Subscribe once at the app shell — do not call from every consumer of useBoardData. */
 export function useBoardRealtime() {
   const qc = useQueryClient();
+  const { companySlug } = useCompany();
 
   useEffect(() => {
+    if (!companySlug) return;
+
     const channel = supabase
-      .channel("sitebook-realtime")
+      .channel(`sitebook-realtime-${companySlug}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "cards" },
@@ -87,33 +105,46 @@ export function useBoardRealtime() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [qc]);
+  }, [qc, companySlug]);
 }
 
 export function useBoardData() {
+  const { companySlug } = useCompany();
+  const enabled = !!companySlug;
+
   const columnsQuery = useQuery({
     queryKey: queryKeys.columns,
     queryFn: fetchColumns,
+    enabled,
+    staleTime: 30_000,
   });
 
   const cardsQuery = useQuery({
     queryKey: queryKeys.cards,
     queryFn: fetchCards,
+    enabled,
+    staleTime: 30_000,
   });
 
   const checklistQuery = useQuery({
     queryKey: queryKeys.checklist,
     queryFn: fetchChecklistItems,
+    enabled,
+    staleTime: 30_000,
   });
 
   const templatesQuery = useQuery({
     queryKey: queryKeys.templates,
     queryFn: fetchTemplates,
+    enabled,
+    staleTime: 60_000,
   });
 
   const commentCountsQuery = useQuery({
     queryKey: queryKeys.commentCounts,
     queryFn: fetchCommentCounts,
+    enabled,
+    staleTime: 30_000,
   });
 
   return {
@@ -123,10 +154,11 @@ export function useBoardData() {
     templates: templatesQuery.data ?? [],
     commentCounts: commentCountsQuery.data ?? {},
     isLoading:
-      columnsQuery.isLoading ||
-      cardsQuery.isLoading ||
-      checklistQuery.isLoading ||
-      templatesQuery.isLoading,
+      enabled &&
+      (columnsQuery.isLoading ||
+        cardsQuery.isLoading ||
+        checklistQuery.isLoading ||
+        templatesQuery.isLoading),
     isError:
       columnsQuery.isError ||
       cardsQuery.isError ||
@@ -454,11 +486,12 @@ export function useBoardMutations() {
 
 export function useComments(cardId: string | null) {
   const qc = useQueryClient();
+  const { companySlug } = useCompany();
 
   const query = useQuery({
     queryKey: cardId ? queryKeys.comments(cardId) : ["comments", "none"],
     queryFn: () => fetchComments(cardId!),
-    enabled: !!cardId,
+    enabled: !!cardId && !!companySlug,
   });
 
   const add = useMutation({

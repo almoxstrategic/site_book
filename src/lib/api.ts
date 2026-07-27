@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase/client";
 import { DEFAULT_CHECKLIST, checklistItemLabel } from "@/lib/checklist-defaults";
+import { getCompanySlug } from "@/lib/company-scope";
 import {
   extractSiteState,
   type Card,
@@ -8,6 +9,7 @@ import {
   type Column,
   type Comment,
   type CommentWithCard,
+  type Company,
   type TeamTask,
   type TeamTaskStatus,
   type TeamChecklistSection,
@@ -17,10 +19,74 @@ import {
   type SiteReminder,
 } from "@/lib/types";
 
+export async function fetchCompanies(): Promise<Company[]> {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("*")
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return (data as Company[]) ?? [];
+}
+
+export async function fetchCompanyBySlug(slug: string): Promise<Company | null> {
+  const { data, error } = await supabase
+    .from("companies")
+    .select("*")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Company) ?? null;
+}
+
+export async function createCompany(params: {
+  name: string;
+  slug: string;
+}): Promise<Company> {
+  const { data, error } = await supabase
+    .from("companies")
+    .insert({
+      name: params.name.trim(),
+      slug: params.slug.trim().toLowerCase(),
+      logo_url: null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Company;
+}
+
+export async function updateCompany(params: {
+  currentSlug: string;
+  name: string;
+  slug: string;
+}): Promise<Company> {
+  const nextSlug = params.slug.trim().toLowerCase();
+  const { data, error } = await supabase
+    .from("companies")
+    .update({
+      name: params.name.trim(),
+      slug: nextSlug,
+    })
+    .eq("slug", params.currentSlug)
+    .select()
+    .single();
+  if (error) throw error;
+  return data as Company;
+}
+
+export async function deleteCompany(slug: string): Promise<void> {
+  if (slug === "global") {
+    throw new Error("A empresa Global não pode ser excluída.");
+  }
+  const { error } = await supabase.from("companies").delete().eq("slug", slug);
+  if (error) throw error;
+}
+
 export async function fetchColumns(): Promise<Column[]> {
   const { data, error } = await supabase
     .from("columns")
     .select("*")
+    .eq("company_slug", getCompanySlug())
     .order("position", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -30,13 +96,18 @@ export async function createColumn(name: string): Promise<Column> {
   const { data: max } = await supabase
     .from("columns")
     .select("position")
+    .eq("company_slug", getCompanySlug())
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   const { data, error } = await supabase
     .from("columns")
-    .insert({ name, position: (max?.position ?? -1) + 1 })
+    .insert({
+      name,
+      position: (max?.position ?? -1) + 1,
+      company_slug: getCompanySlug(),
+    })
     .select()
     .single();
   if (error) throw error;
@@ -76,6 +147,7 @@ export async function fetchCards(): Promise<Card[]> {
   const { data, error } = await supabase
     .from("cards")
     .select("*")
+    .eq("company_slug", getCompanySlug())
     .order("position", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -93,6 +165,7 @@ export async function createCard(
     .from("cards")
     .select("position")
     .eq("column_id", columnId)
+    .eq("company_slug", getCompanySlug())
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -107,6 +180,7 @@ export async function createCard(
       state: extractSiteState(resolvedTitle),
       column_id: columnId,
       position: (max?.position ?? -1) + 1,
+      company_slug: getCompanySlug(),
     })
     .select()
     .single();
@@ -154,6 +228,7 @@ export async function moveCard(params: {
   const { data: cards, error: fetchError } = await supabase
     .from("cards")
     .select("*")
+    .eq("company_slug", getCompanySlug())
     .in("column_id", Array.from(new Set([fromColumnId, toColumnId])));
   if (fetchError) throw fetchError;
 
@@ -199,6 +274,7 @@ export async function fetchChecklistItems(): Promise<CardChecklistItem[]> {
     .select(
       `*, checklist_templates(*, checklist_categories(*)), checklist_categories(*)`
     )
+    .eq("company_slug", getCompanySlug())
     .order("id", { ascending: true });
   if (error) throw error;
   return (data as CardChecklistItem[]) ?? [];
@@ -229,6 +305,7 @@ export async function toggleChecklistItem(
     .insert({
       site_id: item.card_id,
       action_description,
+      company_slug: getCompanySlug(),
     });
   if (historyError) {
     console.error("Failed to log site activity history:", historyError);
@@ -244,6 +321,7 @@ export async function fetchSiteActivityHistory(
     .from("site_activity_history")
     .select("*")
     .eq("site_id", siteId)
+    .eq("company_slug", getCompanySlug())
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data as SiteActivityHistory[]) ?? [];
@@ -273,6 +351,7 @@ export async function addChecklistItem(params: {
     .select("sort_order")
     .eq("card_id", params.cardId)
     .eq("category_id", params.categoryId)
+    .eq("company_slug", getCompanySlug())
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -286,6 +365,7 @@ export async function addChecklistItem(params: {
       label: params.label?.trim() || "",
       is_completed: false,
       sort_order: (max?.sort_order ?? -1) + 1,
+      company_slug: getCompanySlug(),
     })
     .select(CHECKLIST_SELECT)
     .single();
@@ -307,12 +387,14 @@ export async function seedDefaultChecklists(
   const { data: categories, error: catErr } = await supabase
     .from("checklist_categories")
     .select("*")
+    .eq("company_slug", getCompanySlug())
     .order("sort_order", { ascending: true });
   if (catErr) throw catErr;
 
   const { data: templates, error: tmplErr } = await supabase
     .from("checklist_templates")
     .select("*")
+    .eq("company_slug", getCompanySlug())
     .order("sort_order", { ascending: true });
   if (tmplErr) throw tmplErr;
 
@@ -326,7 +408,7 @@ export async function seedDefaultChecklists(
     catSort += 1;
     const { data, error } = await supabase
       .from("checklist_categories")
-      .insert({ name, sort_order: catSort })
+      .insert({ name, sort_order: catSort, company_slug: getCompanySlug() })
       .select()
       .single();
     if (error) throw error;
@@ -345,7 +427,12 @@ export async function seedDefaultChecklists(
     if (found) return found;
     const { data, error } = await supabase
       .from("checklist_templates")
-      .insert({ category_id: categoryId, label, sort_order: sortOrder })
+      .insert({
+        category_id: categoryId,
+        label,
+        sort_order: sortOrder,
+        company_slug: getCompanySlug(),
+      })
       .select()
       .single();
     if (error) throw error;
@@ -375,9 +462,11 @@ export async function seedDefaultChecklists(
   const { error: deleteErr } = await supabase
     .from("card_checklist_items")
     .delete()
-    .eq("card_id", cardId);
+    .eq("card_id", cardId)
+    .eq("company_slug", getCompanySlug());
   if (deleteErr) throw deleteErr;
 
+  const companySlug = getCompanySlug();
   const toInsert = resolved.map((r) => ({
     card_id: cardId,
     template_id: r.template_id,
@@ -385,6 +474,7 @@ export async function seedDefaultChecklists(
     label: null as string | null,
     is_completed: false,
     sort_order: r.sort_order,
+    company_slug: companySlug,
   }));
 
   const { error: insertErr } = await supabase
@@ -402,13 +492,17 @@ export async function fetchTemplates(): Promise<ChecklistTemplate[]> {
   const { data, error } = await supabase
     .from("checklist_templates")
     .select(`*, checklist_categories(*)`)
+    .eq("company_slug", getCompanySlug())
     .order("sort_order", { ascending: true });
   if (error) throw error;
   return (data as ChecklistTemplate[]) ?? [];
 }
 
 export async function fetchCommentCounts(): Promise<Record<string, number>> {
-  const { data, error } = await supabase.from("comments").select("card_id");
+  const { data, error } = await supabase
+    .from("comments")
+    .select("card_id")
+    .eq("company_slug", getCompanySlug());
   if (error) throw error;
   const counts: Record<string, number> = {};
   for (const row of data ?? []) {
@@ -422,6 +516,7 @@ export async function fetchComments(cardId: string): Promise<Comment[]> {
     .from("comments")
     .select("*")
     .eq("card_id", cardId)
+    .eq("company_slug", getCompanySlug())
     .order("created_at", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -440,7 +535,8 @@ export async function searchComments(params: {
 
   let query = supabase
     .from("comments")
-    .select("*, cards(id, title, state, attribute)");
+    .select("*, cards(id, title, state, attribute)")
+    .eq("company_slug", getCompanySlug());
 
   if (term) {
     query = query.ilike("content", `%${term}%`);
@@ -455,7 +551,10 @@ export async function searchComments(params: {
 }
 
 export async function fetchCommentAuthors(): Promise<string[]> {
-  const { data, error } = await supabase.from("comments").select("author");
+  const { data, error } = await supabase
+    .from("comments")
+    .select("author")
+    .eq("company_slug", getCompanySlug());
   if (error) throw error;
 
   const authors = new Set<string>();
@@ -476,7 +575,12 @@ export async function createComment(
 ): Promise<Comment> {
   const { data, error } = await supabase
     .from("comments")
-    .insert({ card_id: cardId, author, content })
+    .insert({
+      card_id: cardId,
+      author,
+      content,
+      company_slug: getCompanySlug(),
+    })
     .select()
     .single();
   if (error) throw error;
@@ -506,6 +610,7 @@ export async function fetchTeamTasks(): Promise<TeamTask[]> {
   const { data, error } = await supabase
     .from("team_tasks")
     .select("*")
+    .eq("company_slug", getCompanySlug())
     .order("position", { ascending: true });
   if (error) throw error;
   return (data as TeamTask[]) ?? [];
@@ -521,6 +626,7 @@ export async function createTeamTask(params: {
     .from("team_tasks")
     .select("position")
     .eq("status", status)
+    .eq("company_slug", getCompanySlug())
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -532,6 +638,7 @@ export async function createTeamTask(params: {
       description: params.description?.trim() ?? "",
       status,
       position: (max?.position ?? -1) + 1,
+      company_slug: getCompanySlug(),
     })
     .select()
     .single();
@@ -571,6 +678,7 @@ export async function moveTeamTask(params: {
   const { data: tasks, error: fetchError } = await supabase
     .from("team_tasks")
     .select("*")
+    .eq("company_slug", getCompanySlug())
     .in("status", Array.from(new Set([fromStatus, toStatus])));
   if (fetchError) throw fetchError;
 
@@ -615,7 +723,8 @@ export async function fetchTeamChecklistProgress(): Promise<
 > {
   const { data, error } = await supabase
     .from("team_task_checklist_items")
-    .select("team_task_id, is_completed");
+    .select("team_task_id, is_completed")
+    .eq("company_slug", getCompanySlug());
   if (error) throw error;
 
   const progress: Record<string, { completed: number; total: number }> = {};
@@ -638,11 +747,13 @@ export async function fetchTeamTaskChecklist(teamTaskId: string): Promise<{
       .from("team_task_checklist_sections")
       .select("*")
       .eq("team_task_id", teamTaskId)
+      .eq("company_slug", getCompanySlug())
       .order("sort_order", { ascending: true }),
     supabase
       .from("team_task_checklist_items")
       .select("*")
       .eq("team_task_id", teamTaskId)
+      .eq("company_slug", getCompanySlug())
       .order("sort_order", { ascending: true }),
   ]);
 
@@ -665,6 +776,7 @@ export async function createTeamChecklistSection(params: {
     .from("team_task_checklist_sections")
     .select("sort_order")
     .eq("team_task_id", params.teamTaskId)
+    .eq("company_slug", getCompanySlug())
     .order("sort_order", { ascending: false })
     .limit(1);
 
@@ -681,6 +793,7 @@ export async function createTeamChecklistSection(params: {
       parent_id: parentId,
       title: params.title.trim() || (parentId ? "Novo subtópico" : "Novo tópico"),
       sort_order: (max?.sort_order ?? -1) + 1,
+      company_slug: getCompanySlug(),
     })
     .select()
     .single();
@@ -735,12 +848,14 @@ export async function importTeamChecklist(params: {
     .from("team_task_checklist_sections")
     .select("sort_order")
     .eq("team_task_id", targetTaskId)
+    .eq("company_slug", getCompanySlug())
     .is("parent_id", null)
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   let nextTopicOrder = (maxTopic?.sort_order ?? -1) + 1;
+  const companySlug = getCompanySlug();
 
   for (const topic of topics) {
     const { data: newTopic, error: topicErr } = await supabase
@@ -750,6 +865,7 @@ export async function importTeamChecklist(params: {
         parent_id: null,
         title: topic.title,
         sort_order: nextTopicOrder++,
+        company_slug: companySlug,
       })
       .select()
       .single();
@@ -769,6 +885,7 @@ export async function importTeamChecklist(params: {
             label: item.label,
             is_completed: false,
             sort_order: index,
+            company_slug: companySlug,
           }))
         );
       if (itemsErr) throw itemsErr;
@@ -787,6 +904,7 @@ export async function importTeamChecklist(params: {
           parent_id: newTopic.id,
           title: sub.title,
           sort_order: sIdx,
+          company_slug: companySlug,
         })
         .select()
         .single();
@@ -806,6 +924,7 @@ export async function importTeamChecklist(params: {
               label: item.label,
               is_completed: false,
               sort_order: index,
+              company_slug: companySlug,
             }))
           );
         if (subItemsErr) throw subItemsErr;
@@ -823,6 +942,7 @@ export async function createTeamChecklistItem(params: {
     .from("team_task_checklist_items")
     .select("sort_order")
     .eq("section_id", params.sectionId)
+    .eq("company_slug", getCompanySlug())
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -835,6 +955,7 @@ export async function createTeamChecklistItem(params: {
       label: params.label?.trim() ?? "",
       is_completed: false,
       sort_order: (max?.sort_order ?? -1) + 1,
+      company_slug: getCompanySlug(),
     })
     .select()
     .single();
@@ -854,11 +975,13 @@ export async function createTeamChecklistItemsBulk(params: {
     .from("team_task_checklist_items")
     .select("sort_order")
     .eq("section_id", params.sectionId)
+    .eq("company_slug", getCompanySlug())
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle();
 
   const start = (max?.sort_order ?? -1) + 1;
+  const companySlug = getCompanySlug();
   const { data, error } = await supabase
     .from("team_task_checklist_items")
     .insert(
@@ -868,6 +991,7 @@ export async function createTeamChecklistItemsBulk(params: {
         label,
         is_completed: false,
         sort_order: start + index,
+        company_slug: companySlug,
       }))
     )
     .select();
@@ -898,6 +1022,7 @@ export async function toggleTeamChecklistItem(
       .insert({
         team_task_id: opts.teamTaskId,
         action_description,
+        company_slug: getCompanySlug(),
       });
     if (historyError) {
       console.error("Failed to log team task history:", historyError);
@@ -914,6 +1039,7 @@ export async function fetchTeamTaskHistory(
     .from("team_task_history")
     .select("*")
     .eq("team_task_id", teamTaskId)
+    .eq("company_slug", getCompanySlug())
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data as TeamTaskHistory[]) ?? [];
@@ -961,6 +1087,7 @@ export async function fetchPendingReminders(): Promise<SiteReminder[]> {
   const { data, error } = await supabase
     .from("site_reminders")
     .select(REMINDER_SELECT)
+    .eq("company_slug", getCompanySlug())
     .eq("is_completed", false)
     .order("reminder_date", { ascending: true });
   if (error) throw error;
@@ -973,6 +1100,7 @@ export async function fetchDueRemindersCount(): Promise<number> {
   const { count, error } = await supabase
     .from("site_reminders")
     .select("id", { count: "exact", head: true })
+    .eq("company_slug", getCompanySlug())
     .eq("is_completed", false)
     .lte("reminder_date", today);
   if (error) throw error;
@@ -991,6 +1119,7 @@ export async function createSiteReminder(params: {
       description: params.description.trim(),
       reminder_date: params.reminderDate,
       is_completed: false,
+      company_slug: getCompanySlug(),
     })
     .select(REMINDER_SELECT)
     .single();

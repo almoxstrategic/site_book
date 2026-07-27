@@ -29,11 +29,13 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { fetchCommentAuthors, searchComments } from "@/lib/api";
+import { tryGetCompanySlug } from "@/lib/company-scope";
 import { useSelectedCard } from "@/hooks/use-selected-card";
 import type { CommentWithCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ALL_AUTHORS = "__all_authors__";
+const companyPart = () => tryGetCompanySlug() ?? "none";
 
 type SortOrder = "newest" | "oldest";
 
@@ -217,7 +219,7 @@ export function CommentsSearchView() {
   }
 
   const { data: authors = [] } = useQuery({
-    queryKey: ["comment-authors"],
+    queryKey: ["comment-authors", companyPart()],
     queryFn: fetchCommentAuthors,
   });
 
@@ -238,6 +240,7 @@ export function CommentsSearchView() {
   } = useQuery({
     queryKey: [
       "comments-search",
+      companyPart(),
       debouncedTerm,
       selectedAuthor,
       sortOrder,

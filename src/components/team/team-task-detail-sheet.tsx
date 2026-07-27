@@ -32,6 +32,7 @@ import {
   TEAM_TASK_STATUS_LABELS,
   type TeamTask,
 } from "@/lib/types";
+import { tryGetCompanySlug } from "@/lib/company-scope";
 
 type Props = {
   task: TeamTask | null;
@@ -39,11 +40,11 @@ type Props = {
   onOpenChange: (open: boolean) => void;
 };
 
+const companyPart = () => tryGetCompanySlug() ?? "none";
 const checklistKey = (taskId: string) =>
-  ["team-task-checklist", taskId] as const;
-
+  ["team-task-checklist", companyPart(), taskId] as const;
 const historyKey = (taskId: string) =>
-  ["team-task-history", taskId] as const;
+  ["team-task-history", companyPart(), taskId] as const;
 
 export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
   const qc = useQueryClient();
@@ -61,13 +62,17 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
   }, [task?.id, task?.title, task?.description, open]);
 
   const { data: checklist, isLoading } = useQuery({
-    queryKey: task ? checklistKey(task.id) : ["team-task-checklist", "none"],
+    queryKey: task
+      ? checklistKey(task.id)
+      : ["team-task-checklist", companyPart(), "none"],
     queryFn: () => fetchTeamTaskChecklist(task!.id),
     enabled: !!task && open,
   });
 
   const { data: history = [], isLoading: historyLoading } = useQuery({
-    queryKey: task ? historyKey(task.id) : ["team-task-history", "none"],
+    queryKey: task
+      ? historyKey(task.id)
+      : ["team-task-history", companyPart(), "none"],
     queryFn: () => fetchTeamTaskHistory(task!.id),
     enabled: !!task && open,
   });
@@ -75,7 +80,9 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
   function invalidateChecklist() {
     if (!task) return;
     qc.invalidateQueries({ queryKey: checklistKey(task.id) });
-    qc.invalidateQueries({ queryKey: ["team-checklist-progress"] });
+    qc.invalidateQueries({
+      queryKey: ["team-checklist-progress", companyPart()],
+    });
   }
 
   function invalidateHistory() {
@@ -84,7 +91,7 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
   }
 
   function invalidateTasks() {
-    qc.invalidateQueries({ queryKey: ["team-tasks"] });
+    qc.invalidateQueries({ queryKey: ["team-tasks", companyPart()] });
   }
 
   const updateDetails = useMutation({
@@ -152,11 +159,13 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
     onMutate: async ({ id, isCompleted }) => {
       if (!task) return;
       await qc.cancelQueries({ queryKey: checklistKey(task.id) });
-      await qc.cancelQueries({ queryKey: ["team-checklist-progress"] });
+      await qc.cancelQueries({
+        queryKey: ["team-checklist-progress", companyPart()],
+      });
       const previous = qc.getQueryData(checklistKey(task.id));
       const previousProgress = qc.getQueryData<
         Record<string, { completed: number; total: number }>
-      >(["team-checklist-progress"]);
+      >(["team-checklist-progress", companyPart()]);
 
       qc.setQueryData(
         checklistKey(task.id),
@@ -180,7 +189,7 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
         const completed = checklist.items.filter((i) => i.is_completed).length;
         const total = checklist.items.length;
         qc.setQueryData(
-          ["team-checklist-progress"],
+          ["team-checklist-progress", companyPart()],
           (
             old: Record<string, { completed: number; total: number }> | undefined
           ) => ({
@@ -197,7 +206,10 @@ export function TeamTaskDetailSheet({ task, open, onOpenChange }: Props) {
         qc.setQueryData(checklistKey(task.id), ctx.previous);
       }
       if (ctx?.previousProgress) {
-        qc.setQueryData(["team-checklist-progress"], ctx.previousProgress);
+        qc.setQueryData(
+          ["team-checklist-progress", companyPart()],
+          ctx.previousProgress
+        );
       }
       toast.error(e.message || "Erro ao atualizar item");
     },

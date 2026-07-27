@@ -48,10 +48,14 @@ import {
   type TeamTaskStatus,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { tryGetCompanySlug } from "@/lib/company-scope";
+import { useCompany } from "@/hooks/use-company";
 import { TeamTaskDetailSheet } from "@/components/team/team-task-detail-sheet";
 
-const queryKey = ["team-tasks"] as const;
-const progressQueryKey = ["team-checklist-progress"] as const;
+const companyPart = () => tryGetCompanySlug() ?? "none";
+const queryKey = () => ["team-tasks", companyPart()] as const;
+const progressQueryKey = () =>
+  ["team-checklist-progress", companyPart()] as const;
 
 function TeamTaskCard({
   task,
@@ -266,13 +270,20 @@ function TeamColumn({
 
 export function TeamKanbanView() {
   const qc = useQueryClient();
+  const { companySlug } = useCompany();
+  const enabled = !!companySlug;
+
   const { data: tasks = [], isLoading, isError } = useQuery({
-    queryKey,
+    queryKey: queryKey(),
     queryFn: fetchTeamTasks,
+    enabled,
+    staleTime: 30_000,
   });
   const { data: progress = {} } = useQuery({
-    queryKey: progressQueryKey,
+    queryKey: progressQueryKey(),
     queryFn: fetchTeamChecklistProgress,
+    enabled,
+    staleTime: 30_000,
   });
 
   const [activeTask, setActiveTask] = useState<TeamTask | null>(null);
@@ -305,7 +316,7 @@ export function TeamKanbanView() {
   const createMutation = useMutation({
     mutationFn: createTeamTask,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({ queryKey: queryKey() });
       toast.success("Tarefa criada");
       setTitle("");
       setDescription("");
@@ -317,7 +328,7 @@ export function TeamKanbanView() {
   const deleteMutation = useMutation({
     mutationFn: deleteTeamTask,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey });
+      qc.invalidateQueries({ queryKey: queryKey() });
       toast.success("Tarefa excluída");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao excluir tarefa"),
@@ -326,10 +337,10 @@ export function TeamKanbanView() {
   const moveMutation = useMutation({
     mutationFn: moveTeamTask,
     onMutate: async (vars) => {
-      await qc.cancelQueries({ queryKey });
-      const previous = qc.getQueryData<TeamTask[]>(queryKey);
+      await qc.cancelQueries({ queryKey: queryKey() });
+      const previous = qc.getQueryData<TeamTask[]>(queryKey());
 
-      qc.setQueryData<TeamTask[]>(queryKey, (old) => {
+      qc.setQueryData<TeamTask[]>(queryKey(), (old) => {
         if (!old) return old;
         const moving = old.find((t) => t.id === vars.taskId);
         if (!moving) return old;
@@ -369,10 +380,10 @@ export function TeamKanbanView() {
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(queryKey, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(queryKey(), ctx.previous);
       toast.error(e.message || "Erro ao mover tarefa");
     },
-    onSettled: () => qc.invalidateQueries({ queryKey }),
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKey() }),
   });
 
   function findStatus(id: string): TeamTaskStatus | undefined {

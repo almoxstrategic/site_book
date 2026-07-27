@@ -32,6 +32,9 @@ import {
 } from "@/lib/api";
 import { TEAM_TASK_STATUS_LABELS, type TeamTask } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { tryGetCompanySlug } from "@/lib/company-scope";
+
+const companyPart = () => tryGetCompanySlug() ?? "none";
 
 type Props = {
   open: boolean;
@@ -50,7 +53,7 @@ export function ImportTeamChecklistDialog({
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
 
   const { data: tasks = [] } = useQuery({
-    queryKey: ["team-tasks"],
+    queryKey: ["team-tasks", companyPart()],
     queryFn: fetchTeamTasks,
     enabled: open,
   });
@@ -71,7 +74,11 @@ export function ImportTeamChecklistDialog({
     data: sourceChecklist,
     isFetching: loadingStructure,
   } = useQuery({
-    queryKey: ["team-task-checklist-import-preview", sourceTaskId],
+    queryKey: [
+      "team-task-checklist-import-preview",
+      companyPart(),
+      sourceTaskId,
+    ],
     queryFn: () => fetchTeamTaskChecklist(sourceTaskId),
     enabled: open && !!sourceTaskId,
   });

@@ -365,8 +365,12 @@ export function KanbanBoard() {
 
   if (isError) {
     return (
-      <div className="flex h-full items-center justify-center text-rose-600">
-        Erro ao carregar dados do Supabase. Verifique as variáveis de ambiente.
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-rose-600">
+        <p>Erro ao carregar dados do Supabase.</p>
+        <p className="text-xs text-rose-500/80">
+          Confira se a URL é /global (ou o slug da empresa) e se as variáveis
+          NEXT_PUBLIC_SUPABASE_* estão em .env.local.
+        </p>
       </div>
     );
   }
