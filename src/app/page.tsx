@@ -1,21 +1,35 @@
 "use client";
 
 import {
+  Bell,
   BookOpen,
   Columns3,
   LayoutDashboard,
   MessageSquare,
   Users,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KanbanBoard } from "@/components/kanban/kanban-board";
 import { FiltersDashboard } from "@/components/dashboard/filters-dashboard";
 import { CommentsSearchView } from "@/components/comments/comments-search-view";
 import { TeamKanbanView } from "@/components/team/team-kanban-view";
+import {
+  dueRemindersCountKey,
+  RemindersView,
+} from "@/components/reminders/reminders-view";
 import { SitesTotalCard } from "@/components/dashboard/sites-total-card";
 import { SelectedCardProvider } from "@/hooks/use-selected-card";
+import { fetchDueRemindersCount } from "@/lib/api";
 
 export default function Home() {
+  const { data: dueCount = 0 } = useQuery({
+    queryKey: dueRemindersCountKey,
+    queryFn: fetchDueRemindersCount,
+    refetchInterval: 60_000,
+  });
+  const hasDueReminders = dueCount > 0;
+
   return (
     <div className="mx-auto flex min-h-screen w-full min-w-0 max-w-[1600px] flex-1 flex-col overflow-x-hidden px-4 py-3 pb-8 sm:px-6 lg:px-8">
       <header className="animate-fade-up mb-2 shrink-0">
@@ -57,7 +71,18 @@ export default function Home() {
               <MessageSquare className="h-4 w-4" />
               Pesquisar Comentários
             </TabsTrigger>
-            <TabsTrigger value="team-kanban" className="ml-auto gap-2">
+            <TabsTrigger value="reminders" className="relative ml-auto gap-2">
+              <Bell className="h-4 w-4" />
+              Lembretes
+              {hasDueReminders && (
+                <span
+                  className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-white"
+                  aria-label={`${dueCount} lembrete(s) para hoje ou atrasados`}
+                  title={`${dueCount} lembrete(s) para hoje ou atrasados`}
+                />
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="team-kanban" className="gap-2">
               <Users className="h-4 w-4" />
               Kanban de Equipe
             </TabsTrigger>
@@ -82,6 +107,13 @@ export default function Home() {
             className="mt-2 flex min-h-0 min-w-0 flex-1 flex-col outline-none data-[state=inactive]:hidden"
           >
             <CommentsSearchView />
+          </TabsContent>
+
+          <TabsContent
+            value="reminders"
+            className="mt-2 flex min-h-0 min-w-0 flex-1 flex-col outline-none data-[state=inactive]:hidden"
+          >
+            <RemindersView />
           </TabsContent>
 
           <TabsContent

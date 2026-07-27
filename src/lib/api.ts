@@ -14,6 +14,7 @@ import {
   type TeamChecklistItem,
   type TeamTaskHistory,
   type SiteActivityHistory,
+  type SiteReminder,
 } from "@/lib/types";
 
 export async function fetchColumns(): Promise<Column[]> {
@@ -952,4 +953,83 @@ export async function updateTeamTaskDetails(
     .single();
   if (error) throw error;
   return data as TeamTask;
+}
+
+const REMINDER_SELECT = "*, cards(id, title)";
+
+export async function fetchPendingReminders(): Promise<SiteReminder[]> {
+  const { data, error } = await supabase
+    .from("site_reminders")
+    .select(REMINDER_SELECT)
+    .eq("is_completed", false)
+    .order("reminder_date", { ascending: true });
+  if (error) throw error;
+  return (data as SiteReminder[]) ?? [];
+}
+
+/** Pending reminders due today or overdue (for nav badge). */
+export async function fetchDueRemindersCount(): Promise<number> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { count, error } = await supabase
+    .from("site_reminders")
+    .select("id", { count: "exact", head: true })
+    .eq("is_completed", false)
+    .lte("reminder_date", today);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function createSiteReminder(params: {
+  siteId: string;
+  description: string;
+  reminderDate: string;
+}): Promise<SiteReminder> {
+  const { data, error } = await supabase
+    .from("site_reminders")
+    .insert({
+      site_id: params.siteId,
+      description: params.description.trim(),
+      reminder_date: params.reminderDate,
+      is_completed: false,
+    })
+    .select(REMINDER_SELECT)
+    .single();
+  if (error) throw error;
+  return data as SiteReminder;
+}
+
+export async function completeSiteReminder(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("site_reminders")
+    .update({ is_completed: true })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateSiteReminder(params: {
+  id: string;
+  siteId: string;
+  description: string;
+  reminderDate: string;
+}): Promise<SiteReminder> {
+  const { data, error } = await supabase
+    .from("site_reminders")
+    .update({
+      site_id: params.siteId,
+      description: params.description.trim(),
+      reminder_date: params.reminderDate,
+    })
+    .eq("id", params.id)
+    .select(REMINDER_SELECT)
+    .single();
+  if (error) throw error;
+  return data as SiteReminder;
+}
+
+export async function deleteSiteReminder(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("site_reminders")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
 }

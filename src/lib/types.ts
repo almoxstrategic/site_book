@@ -142,3 +142,13 @@ export type ActivityHistoryEntry = {
   action_description: string;
   created_at: string;
 };
+
+export type SiteReminder = {
+  id: string;
+  site_id: string;
+  description: string;
+  reminder_date: string;
+  is_completed: boolean;
+  created_at: string;
+  cards?: Pick<Card, "id" | "title"> | null;
+};
