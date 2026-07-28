@@ -48,6 +48,7 @@ export type ChecklistTemplate = {
   category_id: string;
   label: string;
   sort_order: number;
+  company_slug?: string;
   checklist_categories?: ChecklistCategory;
 };
 
@@ -59,6 +60,7 @@ export type CardChecklistItem = {
   label: string | null;
   sort_order: number;
   is_completed: boolean;
+  company_slug?: string;
   checklist_templates?: ChecklistTemplate & {
     checklist_categories?: ChecklistCategory;
   };

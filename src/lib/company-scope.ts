@@ -19,6 +19,17 @@ export function tryGetCompanySlug(): string | null {
   return activeCompanySlug;
 }
 
+/** Never pass undefined/null into Supabase `.eq('company_slug', …)` — it drops the filter. */
+export function assertCompanySlug(slug: string | null | undefined): string {
+  const normalized = typeof slug === "string" ? slug.trim().toLowerCase() : "";
+  if (!normalized) {
+    throw new Error(
+      "company_slug ausente ou inválido. Escopo de empresa obrigatório."
+    );
+  }
+  return normalized;
+}
+
 export function slugifyCompanyName(name: string): string {
   return name
     .normalize("NFD")

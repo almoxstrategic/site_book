@@ -35,25 +35,16 @@ import { useCompany } from "@/hooks/use-company";
 const companyPart = () => tryGetCompanySlug() ?? "none";
 
 export const queryKeys = {
-  get columns() {
-    return ["columns", companyPart()] as const;
-  },
-  get cards() {
-    return ["cards", companyPart()] as const;
-  },
-  get checklist() {
-    return ["checklist", companyPart()] as const;
-  },
-  get templates() {
-    return ["templates", companyPart()] as const;
-  },
-  get commentCounts() {
-    return ["commentCounts", companyPart()] as const;
-  },
-  comments: (cardId: string) =>
-    ["comments", companyPart(), cardId] as const,
-  siteActivityHistory: (siteId: string) =>
-    ["site-activity-history", companyPart(), siteId] as const,
+  columns: (slug?: string) => ["columns", slug ?? companyPart()] as const,
+  cards: (slug?: string) => ["cards", slug ?? companyPart()] as const,
+  checklist: (slug?: string) => ["checklist", slug ?? companyPart()] as const,
+  templates: (slug?: string) => ["templates", slug ?? companyPart()] as const,
+  commentCounts: (slug?: string) =>
+    ["commentCounts", slug ?? companyPart()] as const,
+  comments: (cardId: string, slug?: string) =>
+    ["comments", slug ?? companyPart(), cardId] as const,
+  siteActivityHistory: (siteId: string, slug?: string) =>
+    ["site-activity-history", slug ?? companyPart(), siteId] as const,
 };
 
 /** Subscribe once at the app shell — do not call from every consumer of useBoardData. */
@@ -70,21 +61,21 @@ export function useBoardRealtime() {
         "postgres_changes",
         { event: "*", schema: "public", table: "cards" },
         () => {
-          qc.invalidateQueries({ queryKey: queryKeys.cards });
+          qc.invalidateQueries({ queryKey: queryKeys.cards(companySlug) });
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "columns" },
         () => {
-          qc.invalidateQueries({ queryKey: queryKeys.columns });
+          qc.invalidateQueries({ queryKey: queryKeys.columns(companySlug) });
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "card_checklist_items" },
         () => {
-          qc.invalidateQueries({ queryKey: queryKeys.checklist });
+          qc.invalidateQueries({ queryKey: queryKeys.checklist(companySlug) });
         }
       )
       .on(
@@ -95,9 +86,13 @@ export function useBoardRealtime() {
             (payload.new as { card_id?: string })?.card_id ??
             (payload.old as { card_id?: string })?.card_id;
           if (cardId) {
-            qc.invalidateQueries({ queryKey: queryKeys.comments(cardId) });
+            qc.invalidateQueries({
+              queryKey: queryKeys.comments(cardId, companySlug),
+            });
           }
-          qc.invalidateQueries({ queryKey: queryKeys.commentCounts });
+          qc.invalidateQueries({
+            queryKey: queryKeys.commentCounts(companySlug),
+          });
         }
       )
       .subscribe();
@@ -113,46 +108,61 @@ export function useBoardData() {
   const enabled = !!companySlug;
 
   const columnsQuery = useQuery({
-    queryKey: queryKeys.columns,
-    queryFn: fetchColumns,
+    queryKey: queryKeys.columns(companySlug),
+    queryFn: () => fetchColumns(companySlug),
     enabled,
     staleTime: 30_000,
   });
 
   const cardsQuery = useQuery({
-    queryKey: queryKeys.cards,
-    queryFn: fetchCards,
+    queryKey: queryKeys.cards(companySlug),
+    queryFn: () => fetchCards(companySlug),
     enabled,
     staleTime: 30_000,
   });
 
   const checklistQuery = useQuery({
-    queryKey: queryKeys.checklist,
-    queryFn: fetchChecklistItems,
+    queryKey: queryKeys.checklist(companySlug),
+    queryFn: () => fetchChecklistItems(companySlug),
     enabled,
     staleTime: 30_000,
   });
 
   const templatesQuery = useQuery({
-    queryKey: queryKeys.templates,
-    queryFn: fetchTemplates,
+    queryKey: queryKeys.templates(companySlug),
+    queryFn: () => fetchTemplates(companySlug),
     enabled,
     staleTime: 60_000,
   });
 
   const commentCountsQuery = useQuery({
-    queryKey: queryKeys.commentCounts,
-    queryFn: fetchCommentCounts,
+    queryKey: queryKeys.commentCounts(companySlug),
+    queryFn: () => fetchCommentCounts(companySlug),
     enabled,
     staleTime: 30_000,
   });
 
+  // Hard tenant fence — never surface another company's rows from a stale cache.
+  const columns = (columnsQuery.data ?? []).filter(
+    (c) => c.company_slug === companySlug
+  );
+  const cards = (cardsQuery.data ?? []).filter(
+    (c) => c.company_slug === companySlug
+  );
+  const checklist = (checklistQuery.data ?? []).filter(
+    (i) => i.company_slug === companySlug
+  );
+  const templates = (templatesQuery.data ?? []).filter(
+    (t) => !t.company_slug || t.company_slug === companySlug
+  );
+
   return {
-    columns: columnsQuery.data ?? [],
-    cards: cardsQuery.data ?? [],
-    checklist: checklistQuery.data ?? [],
-    templates: templatesQuery.data ?? [],
+    columns,
+    cards,
+    checklist,
+    templates,
     commentCounts: commentCountsQuery.data ?? {},
+    companySlug,
     isLoading:
       enabled &&
       (columnsQuery.isLoading ||
@@ -180,11 +190,12 @@ export function useCardProgress(checklist: CardChecklistItem[]) {
 
 export function useBoardMutations() {
   const qc = useQueryClient();
+  const { companySlug } = useCompany();
 
   const invalidateBoard = () => {
-    qc.invalidateQueries({ queryKey: queryKeys.columns });
-    qc.invalidateQueries({ queryKey: queryKeys.cards });
-    qc.invalidateQueries({ queryKey: queryKeys.checklist });
+    qc.invalidateQueries({ queryKey: queryKeys.columns(companySlug) });
+    qc.invalidateQueries({ queryKey: queryKeys.cards(companySlug) });
+    qc.invalidateQueries({ queryKey: queryKeys.checklist(companySlug) });
   };
 
   const addColumn = useMutation({
@@ -218,10 +229,10 @@ export function useBoardMutations() {
   const relocateColumns = useMutation({
     mutationFn: (orderedIds: string[]) => reorderColumns(orderedIds),
     onMutate: async (orderedIds) => {
-      await qc.cancelQueries({ queryKey: queryKeys.columns });
-      const previous = qc.getQueryData(queryKeys.columns);
+      await qc.cancelQueries({ queryKey: queryKeys.columns(companySlug) });
+      const previous = qc.getQueryData(queryKeys.columns(companySlug));
       qc.setQueryData(
-        queryKeys.columns,
+        queryKeys.columns(companySlug),
         (old: Column[] | undefined) => {
           if (!old) return old;
           const byId = new Map(old.map((c) => [c.id, c]));
@@ -236,11 +247,11 @@ export function useBoardMutations() {
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(queryKeys.columns, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(queryKeys.columns(companySlug), ctx.previous);
       toast.error(e.message || "Erro ao reordenar colunas");
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.columns });
+      qc.invalidateQueries({ queryKey: queryKeys.columns(companySlug) });
     },
   });
 
@@ -283,8 +294,8 @@ export function useBoardMutations() {
       state?: string;
     }) => updateCard(id, updates),
     onMutate: async ({ id, ...updates }) => {
-      await qc.cancelQueries({ queryKey: queryKeys.cards });
-      const previous = qc.getQueryData(queryKeys.cards);
+      await qc.cancelQueries({ queryKey: queryKeys.cards(companySlug) });
+      const previous = qc.getQueryData(queryKeys.cards(companySlug));
       const optimistic =
         updates.title !== undefined && updates.state === undefined
           ? {
@@ -293,29 +304,29 @@ export function useBoardMutations() {
             }
           : updates;
       qc.setQueryData(
-        queryKeys.cards,
+        queryKeys.cards(companySlug),
         (old: Awaited<ReturnType<typeof fetchCards>> | undefined) =>
           old?.map((c) => (c.id === id ? { ...c, ...optimistic } : c))
       );
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(queryKeys.cards, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(queryKeys.cards(companySlug), ctx.previous);
       toast.error(e.message || "Erro ao atualizar card");
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.cards });
+      qc.invalidateQueries({ queryKey: queryKeys.cards(companySlug) });
     },
   });
 
   const relocateCard = useMutation({
     mutationFn: moveCard,
     onMutate: async (vars) => {
-      const previous = qc.getQueryData(queryKeys.cards);
+      const previous = qc.getQueryData(queryKeys.cards(companySlug));
 
       // Apply optimistic move synchronously before any await
       qc.setQueryData(
-        queryKeys.cards,
+        queryKeys.cards(companySlug),
         (old: Awaited<ReturnType<typeof fetchCards>> | undefined) => {
           if (!old) return old;
           const cards = [...old];
@@ -347,16 +358,16 @@ export function useBoardMutations() {
         }
       );
 
-      await qc.cancelQueries({ queryKey: queryKeys.cards });
+      await qc.cancelQueries({ queryKey: queryKeys.cards(companySlug) });
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(queryKeys.cards, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(queryKeys.cards(companySlug), ctx.previous);
       toast.error(e.message || "Erro ao mover card");
     },
     onSettled: () => {
       // Background reconcile — UI already updated optimistically
-      void qc.invalidateQueries({ queryKey: queryKeys.cards });
+      void qc.invalidateQueries({ queryKey: queryKeys.cards(companySlug) });
     },
   });
 
@@ -369,10 +380,10 @@ export function useBoardMutations() {
       isCompleted: boolean;
     }) => toggleChecklistItem(itemId, isCompleted),
     onMutate: async ({ itemId, isCompleted }) => {
-      await qc.cancelQueries({ queryKey: queryKeys.checklist });
-      const previous = qc.getQueryData(queryKeys.checklist);
+      await qc.cancelQueries({ queryKey: queryKeys.checklist(companySlug) });
+      const previous = qc.getQueryData(queryKeys.checklist(companySlug));
       qc.setQueryData(
-        queryKeys.checklist,
+        queryKeys.checklist(companySlug),
         (old: CardChecklistItem[] | undefined) =>
           old?.map((i) =>
             i.id === itemId ? { ...i, is_completed: isCompleted } : i
@@ -381,19 +392,19 @@ export function useBoardMutations() {
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(queryKeys.checklist, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(queryKeys.checklist(companySlug), ctx.previous);
       toast.error(e.message || "Erro ao atualizar checklist");
     },
     onSuccess: (data) => {
       toast.success("Checklist atualizado");
       if (data?.card_id) {
         qc.invalidateQueries({
-          queryKey: queryKeys.siteActivityHistory(data.card_id),
+          queryKey: queryKeys.siteActivityHistory(data.card_id, companySlug),
         });
       }
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+      qc.invalidateQueries({ queryKey: queryKeys.checklist(companySlug) });
     },
   });
 
@@ -401,10 +412,10 @@ export function useBoardMutations() {
     mutationFn: ({ itemId, label }: { itemId: string; label: string }) =>
       updateChecklistItemLabel(itemId, label),
     onMutate: async ({ itemId, label }) => {
-      await qc.cancelQueries({ queryKey: queryKeys.checklist });
-      const previous = qc.getQueryData(queryKeys.checklist);
+      await qc.cancelQueries({ queryKey: queryKeys.checklist(companySlug) });
+      const previous = qc.getQueryData(queryKeys.checklist(companySlug));
       qc.setQueryData(
-        queryKeys.checklist,
+        queryKeys.checklist(companySlug),
         (old: CardChecklistItem[] | undefined) =>
           old?.map((i) =>
             i.id === itemId ? { ...i, label: label.trim() || null } : i
@@ -413,18 +424,18 @@ export function useBoardMutations() {
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(queryKeys.checklist, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(queryKeys.checklist(companySlug), ctx.previous);
       toast.error(e.message || "Erro ao renomear item");
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+      qc.invalidateQueries({ queryKey: queryKeys.checklist(companySlug) });
     },
   });
 
   const createChecklistItem = useMutation({
     mutationFn: addChecklistItem,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+      qc.invalidateQueries({ queryKey: queryKeys.checklist(companySlug) });
       toast.success("Item adicionado");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao adicionar item"),
@@ -433,30 +444,30 @@ export function useBoardMutations() {
   const removeChecklistItem = useMutation({
     mutationFn: deleteChecklistItem,
     onMutate: async (itemId) => {
-      await qc.cancelQueries({ queryKey: queryKeys.checklist });
-      const previous = qc.getQueryData(queryKeys.checklist);
+      await qc.cancelQueries({ queryKey: queryKeys.checklist(companySlug) });
+      const previous = qc.getQueryData(queryKeys.checklist(companySlug));
       qc.setQueryData(
-        queryKeys.checklist,
+        queryKeys.checklist(companySlug),
         (old: CardChecklistItem[] | undefined) =>
           old?.filter((i) => i.id !== itemId)
       );
       return { previous };
     },
     onError: (e: Error, _v, ctx) => {
-      if (ctx?.previous) qc.setQueryData(queryKeys.checklist, ctx.previous);
+      if (ctx?.previous) qc.setQueryData(queryKeys.checklist(companySlug), ctx.previous);
       toast.error(e.message || "Erro ao excluir item");
     },
     onSuccess: () => toast.success("Item excluído"),
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.checklist });
+      qc.invalidateQueries({ queryKey: queryKeys.checklist(companySlug) });
     },
   });
 
   const applyDefaultChecklists = useMutation({
     mutationFn: (cardId: string) => seedDefaultChecklists(cardId),
     onSuccess: (result) => {
-      qc.invalidateQueries({ queryKey: queryKeys.checklist });
-      qc.invalidateQueries({ queryKey: queryKeys.templates });
+      qc.invalidateQueries({ queryKey: queryKeys.checklist(companySlug) });
+      qc.invalidateQueries({ queryKey: queryKeys.templates(companySlug) });
       if (result.added === 0) {
         toast.message("Checklists padrão já estão neste card");
       } else {
@@ -491,7 +502,9 @@ export function useComments(cardId: string | null) {
   const { companySlug } = useCompany();
 
   const query = useQuery({
-    queryKey: cardId ? queryKeys.comments(cardId) : ["comments", "none"],
+    queryKey: cardId
+      ? queryKeys.comments(cardId, companySlug)
+      : ["comments", "none"],
     queryFn: () => fetchComments(cardId!),
     enabled: !!cardId && !!companySlug,
   });
@@ -505,8 +518,10 @@ export function useComments(cardId: string | null) {
       content: string;
     }) => createComment(cardId!, author, content),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.comments(cardId!) });
-      qc.invalidateQueries({ queryKey: queryKeys.commentCounts });
+      qc.invalidateQueries({
+        queryKey: queryKeys.comments(cardId!, companySlug),
+      });
+      qc.invalidateQueries({ queryKey: queryKeys.commentCounts(companySlug) });
       toast.success("Comentário adicionado");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao comentar"),
@@ -516,7 +531,9 @@ export function useComments(cardId: string | null) {
     mutationFn: ({ id, content }: { id: string; content: string }) =>
       updateComment(id, content),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.comments(cardId!) });
+      qc.invalidateQueries({
+        queryKey: queryKeys.comments(cardId!, companySlug),
+      });
       toast.success("Comentário atualizado");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao editar"),
@@ -525,8 +542,10 @@ export function useComments(cardId: string | null) {
   const remove = useMutation({
     mutationFn: (id: string) => deleteComment(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.comments(cardId!) });
-      qc.invalidateQueries({ queryKey: queryKeys.commentCounts });
+      qc.invalidateQueries({
+        queryKey: queryKeys.comments(cardId!, companySlug),
+      });
+      qc.invalidateQueries({ queryKey: queryKeys.commentCounts(companySlug) });
       toast.success("Comentário excluído");
     },
     onError: (e: Error) => toast.error(e.message || "Erro ao excluir"),

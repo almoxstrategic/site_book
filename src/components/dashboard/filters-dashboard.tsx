@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueries } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
   Check,
@@ -35,8 +36,10 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { useBoardData, useBoardMutations } from "@/hooks/use-board";
+import { queryKeys, useBoardMutations } from "@/hooks/use-board";
+import { useCompany } from "@/hooks/use-company";
 import { useSelectedCard } from "@/hooks/use-selected-card";
+import { fetchCards, fetchChecklistItems, fetchColumns } from "@/lib/api";
 import { checklistItemLabel } from "@/lib/checklist-defaults";
 import {
   exportCrossFilteredReportToExcel,
@@ -225,9 +228,77 @@ function StatusCell({
 }
 
 export function FiltersDashboard() {
-  const { columns, cards, checklist, isLoading, isError } = useBoardData();
+  const { companySlug } = useCompany();
   const { setChecklist } = useBoardMutations();
   const { openCard } = useSelectedCard();
+
+  // Relatórios owns its fetches — never rely on a shared unscoped cache.
+  const [cardsQuery, columnsQuery, checklistQuery] = useQueries({
+    queries: [
+      {
+        queryKey: queryKeys.cards(companySlug),
+        enabled: !!companySlug,
+        staleTime: 30_000,
+        queryFn: async () => {
+          console.log("Slug no Relatório:", companySlug);
+          if (!companySlug) {
+            throw new Error("company_slug ausente — fetch de Relatórios abortado");
+          }
+          return fetchCards(companySlug);
+        },
+      },
+      {
+        queryKey: queryKeys.columns(companySlug),
+        enabled: !!companySlug,
+        staleTime: 30_000,
+        queryFn: async () => {
+          console.log("Slug no Relatório:", companySlug);
+          if (!companySlug) {
+            throw new Error("company_slug ausente — fetch de Relatórios abortado");
+          }
+          return fetchColumns(companySlug);
+        },
+      },
+      {
+        queryKey: queryKeys.checklist(companySlug),
+        enabled: !!companySlug,
+        staleTime: 30_000,
+        queryFn: async () => {
+          console.log("Slug no Relatório:", companySlug);
+          if (!companySlug) {
+            throw new Error("company_slug ausente — fetch de Relatórios abortado");
+          }
+          return fetchChecklistItems(companySlug);
+        },
+      },
+    ],
+  });
+
+  // Absolute tenant fence for table + dropdowns + copy/export.
+  const cards = useMemo(
+    () =>
+      (cardsQuery.data ?? []).filter((c) => c.company_slug === companySlug),
+    [cardsQuery.data, companySlug]
+  );
+  const columns = useMemo(
+    () =>
+      (columnsQuery.data ?? []).filter((c) => c.company_slug === companySlug),
+    [columnsQuery.data, companySlug]
+  );
+  const checklist = useMemo(
+    () =>
+      (checklistQuery.data ?? []).filter(
+        (i) => i.company_slug === companySlug
+      ),
+    [checklistQuery.data, companySlug]
+  );
+  const isLoading =
+    !!companySlug &&
+    (cardsQuery.isLoading ||
+      columnsQuery.isLoading ||
+      checklistQuery.isLoading);
+  const isError =
+    cardsQuery.isError || columnsQuery.isError || checklistQuery.isError;
 
   const [siteId, setSiteId] = useState<string>(ALL_SITES);
   const [columnId, setColumnId] = useState<string>(ALL_POSITIONS);
@@ -334,8 +405,12 @@ export function FiltersDashboard() {
   const checklistRows = useMemo(() => {
     if (isCrossMode) return [] as ChecklistRow[];
 
+    const allowedCardIds = new Set(cards.map((c) => c.id));
+
     return checklist
       .filter((item) => {
+        if (!allowedCardIds.has(item.card_id)) return false;
+
         if (siteId !== ALL_SITES && item.card_id !== siteId) return false;
 
         if (
@@ -383,6 +458,7 @@ export function FiltersDashboard() {
       }));
   }, [
     isCrossMode,
+    cards,
     checklist,
     siteId,
     columnId,

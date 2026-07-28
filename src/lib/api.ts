@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { checklistItemLabel } from "@/lib/checklist-defaults";
 import type { ChecklistTemplateGroup } from "@/lib/checklist-templates";
-import { getCompanySlug } from "@/lib/company-scope";
+import { assertCompanySlug, getCompanySlug } from "@/lib/company-scope";
 import {
   extractSiteState,
   type Card,
@@ -83,11 +83,12 @@ export async function deleteCompany(slug: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function fetchColumns(): Promise<Column[]> {
+export async function fetchColumns(companySlug: string): Promise<Column[]> {
+  const slug = assertCompanySlug(companySlug);
   const { data, error } = await supabase
     .from("columns")
     .select("*")
-    .eq("company_slug", getCompanySlug())
+    .eq("company_slug", slug)
     .order("position", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -144,11 +145,12 @@ export async function deleteColumn(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function fetchCards(): Promise<Card[]> {
+export async function fetchCards(companySlug: string): Promise<Card[]> {
+  const slug = assertCompanySlug(companySlug);
   const { data, error } = await supabase
     .from("cards")
     .select("*")
-    .eq("company_slug", getCompanySlug())
+    .eq("company_slug", slug)
     .order("position", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -269,13 +271,16 @@ export async function moveCard(params: {
   }
 }
 
-export async function fetchChecklistItems(): Promise<CardChecklistItem[]> {
+export async function fetchChecklistItems(
+  companySlug: string
+): Promise<CardChecklistItem[]> {
+  const slug = assertCompanySlug(companySlug);
   const { data, error } = await supabase
     .from("card_checklist_items")
     .select(
       `*, checklist_templates(*, checklist_categories(*)), checklist_categories(*)`
     )
-    .eq("company_slug", getCompanySlug())
+    .eq("company_slug", slug)
     .order("id", { ascending: true });
   if (error) throw error;
   return (data as CardChecklistItem[]) ?? [];
@@ -581,27 +586,33 @@ export async function seedDefaultChecklists(
     .upsert(toUpsert, { onConflict: "card_id,template_id" });
   if (upsertErr) throw upsertErr;
 
-  const items = await fetchChecklistItems().then((all) =>
+  const items = await fetchChecklistItems(companySlug).then((all) =>
     all.filter((i) => i.card_id === cardId)
   );
   return { items, added: toUpsert.length };
 }
 
-export async function fetchTemplates(): Promise<ChecklistTemplate[]> {
+export async function fetchTemplates(
+  companySlug: string
+): Promise<ChecklistTemplate[]> {
+  const slug = assertCompanySlug(companySlug);
   const { data, error } = await supabase
     .from("checklist_templates")
     .select(`*, checklist_categories(*)`)
-    .eq("company_slug", getCompanySlug())
+    .eq("company_slug", slug)
     .order("sort_order", { ascending: true });
   if (error) throw error;
   return (data as ChecklistTemplate[]) ?? [];
 }
 
-export async function fetchCommentCounts(): Promise<Record<string, number>> {
+export async function fetchCommentCounts(
+  companySlug: string
+): Promise<Record<string, number>> {
+  const slug = assertCompanySlug(companySlug);
   const { data, error } = await supabase
     .from("comments")
     .select("card_id")
-    .eq("company_slug", getCompanySlug());
+    .eq("company_slug", slug);
   if (error) throw error;
   const counts: Record<string, number> = {};
   for (const row of data ?? []) {
