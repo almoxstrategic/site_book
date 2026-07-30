@@ -4,6 +4,7 @@ import type { ChecklistTemplateGroup } from "@/lib/checklist-templates";
 import { assertCompanySlug, getCompanySlug } from "@/lib/company-scope";
 import {
   extractSiteState,
+  normalizeSiteAttributeForSave,
   type Card,
   type CardChecklistItem,
   type ChecklistTemplate,
@@ -160,10 +161,12 @@ export async function createCard(
   id: string,
   columnId: string,
   attribute: string,
-  title?: string
+  title?: string,
+  startDate?: string | null
 ): Promise<Card> {
   const trimmed = id.trim().toUpperCase();
   const resolvedTitle = (title ?? trimmed).trim() || trimmed;
+  const normalizedStart = startDate?.trim() || null;
   const { data: max } = await supabase
     .from("cards")
     .select("position")
@@ -179,8 +182,9 @@ export async function createCard(
       id: trimmed,
       title: resolvedTitle,
       description: "",
-      attribute: attribute.trim(),
+      attribute: normalizeSiteAttributeForSave(attribute),
       state: extractSiteState(resolvedTitle),
+      start_date: normalizedStart,
       column_id: columnId,
       position: (max?.position ?? -1) + 1,
       company_slug: getCompanySlug(),
@@ -196,13 +200,25 @@ export async function updateCard(
   updates: Partial<
     Pick<
       Card,
-      "column_id" | "position" | "title" | "description" | "attribute" | "state"
+      | "column_id"
+      | "position"
+      | "title"
+      | "description"
+      | "attribute"
+      | "state"
+      | "start_date"
     >
   >
 ): Promise<Card> {
   const payload = { ...updates };
   if (payload.title !== undefined && payload.state === undefined) {
     payload.state = extractSiteState(payload.title);
+  }
+  if (payload.attribute !== undefined) {
+    payload.attribute = normalizeSiteAttributeForSave(payload.attribute);
+  }
+  if (payload.start_date !== undefined) {
+    payload.start_date = payload.start_date?.trim() || null;
   }
 
   const { data, error } = await supabase

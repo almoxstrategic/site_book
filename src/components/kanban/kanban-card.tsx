@@ -5,6 +5,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { CheckSquare, MessageSquare, Trash2 } from "lucide-react";
 import type { Card } from "@/lib/types";
+import { formatSiteAttribute, formatSiteStartDate } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -22,6 +23,7 @@ function CardContent({
   title,
   state,
   attribute,
+  startDate,
   completed,
   total,
   commentCount,
@@ -31,6 +33,7 @@ function CardContent({
   title: string;
   state: string | null;
   attribute: string | null;
+  startDate: string | null | undefined;
   completed: number;
   total: number;
   commentCount: number;
@@ -38,9 +41,8 @@ function CardContent({
   onDelete?: () => void;
 }) {
   const uf = state?.trim() || null;
-  const attr = attribute?.trim() || null;
-  const metaLine =
-    uf && attr ? `${uf} / ${attr}` : uf || attr || null;
+  const attrDisplay = formatSiteAttribute(attribute);
+  const metaLine = uf ? `${uf} / ${attrDisplay}` : attrDisplay;
 
   return (
     <div className="flex items-start gap-2">
@@ -48,9 +50,10 @@ function CardContent({
         <p className="font-mono text-sm font-semibold tracking-tight text-slate-900">
           {title}
         </p>
-        {metaLine && (
-          <p className="mt-0.5 text-xs text-slate-500">{metaLine}</p>
-        )}
+        <p className="mt-0.5 text-xs text-slate-500">
+          Data de início de obra: {formatSiteStartDate(startDate)}
+        </p>
+        <p className="mt-0.5 text-xs text-slate-500">{metaLine}</p>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
           <CheckSquare className="h-3.5 w-3.5 text-teal-700" />
           <span>
@@ -112,6 +115,7 @@ function KanbanCardOverlay({
         title={title}
         state={card.state}
         attribute={card.attribute}
+        startDate={card.start_date}
         completed={completed}
         total={total}
         commentCount={commentCount}
@@ -184,6 +188,7 @@ function KanbanCardSortable({
         title={title}
         state={card.state}
         attribute={card.attribute}
+        startDate={card.start_date}
         completed={completed}
         total={total}
         commentCount={commentCount}

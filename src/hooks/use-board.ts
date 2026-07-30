@@ -260,11 +260,13 @@ export function useBoardMutations() {
       id,
       columnId,
       attribute,
+      startDate,
     }: {
       id: string;
       columnId: string;
       attribute: string;
-    }) => createCard(id, columnId, attribute),
+      startDate?: string | null;
+    }) => createCard(id, columnId, attribute, undefined, startDate),
     onSuccess: () => {
       invalidateBoard();
       toast.success("Site Book criado");
@@ -292,6 +294,7 @@ export function useBoardMutations() {
       column_id?: string;
       attribute?: string;
       state?: string;
+      start_date?: string | null;
     }) => updateCard(id, updates),
     onMutate: async ({ id, ...updates }) => {
       await qc.cancelQueries({ queryKey: queryKeys.cards(companySlug) });

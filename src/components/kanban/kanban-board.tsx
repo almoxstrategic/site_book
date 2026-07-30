@@ -60,7 +60,7 @@ import {
 } from "@/hooks/use-board";
 import { useSelectedCard } from "@/hooks/use-selected-card";
 import { exportSitebooksToExcel } from "@/lib/export-sitebooks";
-import { SITE_ATTRIBUTES, type Card, type Column } from "@/lib/types";
+import { SITE_ATTRIBUTES, formatSiteAttribute, type Card, type Column } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const ALL_FILTER = "__all__";
@@ -185,7 +185,8 @@ export function KanbanBoard() {
     columnId: string;
   } | null>(null);
   const [newCardId, setNewCardId] = useState("");
-  const [newCardAttribute, setNewCardAttribute] = useState("");
+  const [newCardAttribute, setNewCardAttribute] = useState<string>("-");
+  const [newCardStartDate, setNewCardStartDate] = useState("");
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -231,7 +232,7 @@ export function KanbanBoard() {
     if (filterState !== ALL_FILTER && card.state !== filterState) return false;
     if (
       filterAttribute !== ALL_FILTER &&
-      card.attribute !== filterAttribute
+      formatSiteAttribute(card.attribute) !== filterAttribute
     ) {
       return false;
     }
@@ -613,7 +614,8 @@ export function KanbanBoard() {
           if (!open) {
             setNewCardOpen(null);
             setNewCardId("");
-            setNewCardAttribute("");
+            setNewCardAttribute("-");
+            setNewCardStartDate("");
           }
         }}
       >
@@ -636,7 +638,7 @@ export function KanbanBoard() {
             <div className="flex flex-col gap-2">
               <Label htmlFor="new-card-attribute">Atributo</Label>
               <Select
-                value={newCardAttribute || undefined}
+                value={newCardAttribute || "-"}
                 onValueChange={setNewCardAttribute}
               >
                 <SelectTrigger id="new-card-attribute" className="w-full">
@@ -651,6 +653,17 @@ export function KanbanBoard() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="new-card-start-date">Data de início de obra</Label>
+              <Input
+                id="new-card-start-date"
+                type="date"
+                value={newCardStartDate}
+                onChange={(e) => setNewCardStartDate(e.target.value)}
+                className="h-9"
+              />
+              <p className="text-xs text-slate-500">Opcional</p>
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -658,7 +671,8 @@ export function KanbanBoard() {
               onClick={() => {
                 setNewCardOpen(null);
                 setNewCardId("");
-                setNewCardAttribute("");
+                setNewCardAttribute("-");
+                setNewCardStartDate("");
               }}
             >
               Cancelar
@@ -666,22 +680,23 @@ export function KanbanBoard() {
             <Button
               disabled={
                 !newCardId.trim() ||
-                !newCardAttribute ||
                 !newCardOpen ||
                 addCard.isPending
               }
               onClick={() => {
-                if (!newCardOpen || !newCardAttribute) return;
+                if (!newCardOpen) return;
                 addCard.mutate(
                   {
                     id: newCardId.trim(),
                     columnId: newCardOpen.columnId,
-                    attribute: newCardAttribute,
+                    attribute: newCardAttribute || "-",
+                    startDate: newCardStartDate.trim() || null,
                   },
                   {
                     onSuccess: () => {
                       setNewCardId("");
-                      setNewCardAttribute("");
+                      setNewCardAttribute("-");
+                      setNewCardStartDate("");
                       setNewCardOpen(null);
                     },
                   }

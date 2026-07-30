@@ -46,7 +46,7 @@ import { fetchSiteActivityHistory } from "@/lib/api";
 import { checklistItemLabel } from "@/lib/checklist-defaults";
 import { ActivityHistoryPanel } from "@/components/checklist/activity-history-panel";
 import { ChecklistSearchInput } from "@/components/checklist/checklist-search-input";
-import { SITE_ATTRIBUTES, type Card, type CardChecklistItem, type Column } from "@/lib/types";
+import { SITE_ATTRIBUTES, siteAttributeSelectValue, type Card, type CardChecklistItem, type Column } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -384,7 +384,7 @@ export function CardDetailSheet({
                   </button>
                 )}
                 <Select
-                  value={card.attribute ?? undefined}
+                  value={siteAttributeSelectValue(card.attribute)}
                   onValueChange={(attribute) =>
                     editCard.mutate({ id: card.id, attribute })
                   }
@@ -406,6 +406,46 @@ export function CardDetailSheet({
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <label
+                    htmlFor={`start-date-${card.id}`}
+                    className="text-xs text-slate-500"
+                  >
+                    Definir data de início da obra
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id={`start-date-${card.id}`}
+                      type="date"
+                      value={card.start_date?.slice(0, 10) ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value.trim();
+                        editCard.mutate({
+                          id: card.id,
+                          start_date: value || null,
+                        });
+                      }}
+                      className="h-7 w-auto min-w-[9.5rem] border-slate-200 bg-slate-50 px-2 text-xs text-slate-600 shadow-none"
+                    />
+                    {card.start_date ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-400 hover:text-slate-700"
+                        title="Limpar data"
+                        aria-label="Limpar data de início da obra"
+                        onClick={() =>
+                          editCard.mutate({ id: card.id, start_date: null })
+                        }
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-slate-400">-</span>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

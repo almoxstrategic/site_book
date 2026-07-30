@@ -7,6 +7,7 @@ export type Column = {
 };
 
 export const SITE_ATTRIBUTES = [
+  "-",
   "Poste - Serv. Próprio",
   "Poste - Serv. Terceiro",
   "Torre - Serv. Próprio",
@@ -16,6 +17,36 @@ export const SITE_ATTRIBUTES = [
 ] as const;
 
 export type SiteAttribute = (typeof SITE_ATTRIBUTES)[number];
+
+/** True when attribute is unset / placeholder dash. */
+export function isEmptySiteAttribute(
+  value: string | null | undefined
+): boolean {
+  const trimmed = value?.trim();
+  return !trimmed || trimmed === "-";
+}
+
+/** Display attribute as "-" when empty/null. */
+export function formatSiteAttribute(
+  value: string | null | undefined
+): string {
+  if (isEmptySiteAttribute(value)) return "-";
+  return value!.trim();
+}
+
+/** Select value: map null/empty to the "-" option. */
+export function siteAttributeSelectValue(
+  value: string | null | undefined
+): string {
+  return formatSiteAttribute(value);
+}
+
+/** Persist attribute: store "-" for the empty option (never force a real type). */
+export function normalizeSiteAttributeForSave(
+  value: string | null | undefined
+): string {
+  return formatSiteAttribute(value);
+}
 
 /** First 2 letters of the site title/ID, uppercased (UF). */
 export function extractSiteState(titleOrId: string): string {
@@ -30,12 +61,23 @@ export type Card = {
   attribute: string | null;
   /** UF derived from title; nullable for legacy rows */
   state: string | null;
+  /** Optional construction start date (YYYY-MM-DD) */
+  start_date?: string | null;
   column_id: string;
   position: number;
   company_slug?: string;
   created_at: string;
   updated_at: string;
 };
+
+/** Formats site start_date as DD/MM/AAAA, or "-" when empty. */
+export function formatSiteStartDate(value: string | null | undefined): string {
+  if (!value) return "-";
+  const raw = value.slice(0, 10);
+  const [y, m, d] = raw.split("-");
+  if (!y || !m || !d) return "-";
+  return `${d}/${m}/${y}`;
+}
 
 export type ChecklistCategory = {
   id: string;
