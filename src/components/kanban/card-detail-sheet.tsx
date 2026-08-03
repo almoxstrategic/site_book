@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -106,6 +106,78 @@ function compareChecklistItems(a: CardChecklistItem, b: CardChecklistItem) {
   if (byOrder !== 0) return byOrder;
 
   return a.id.localeCompare(b.id);
+}
+
+function StartDateField({
+  cardId,
+  startDate,
+  onSave,
+}: {
+  cardId: string;
+  startDate: string | null | undefined;
+  onSave: (value: string | null) => void;
+}) {
+  const remoteDate = startDate?.slice(0, 10) ?? "";
+  const [localDate, setLocalDate] = useState(remoteDate);
+
+  useEffect(() => {
+    setLocalDate(remoteDate);
+  }, [cardId, remoteDate]);
+
+  function commitDate() {
+    const next = localDate.trim() || null;
+    const prev = remoteDate || null;
+    if (next === prev) return;
+
+    // Keep typing incomplete values local-only; only persist empty or full YYYY-MM-DD.
+    if (next !== null && !/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+      setLocalDate(remoteDate);
+      return;
+    }
+
+    onSave(next);
+  }
+
+  function clearDate() {
+    setLocalDate("");
+    if (remoteDate) onSave(null);
+  }
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <label
+        htmlFor={`start-date-${cardId}`}
+        className="text-xs text-slate-500"
+      >
+        Definir data de início da obra
+      </label>
+      <div className="flex items-center gap-1">
+        <Input
+          id={`start-date-${cardId}`}
+          type="date"
+          value={localDate}
+          onChange={(e) => setLocalDate(e.target.value)}
+          onBlur={commitDate}
+          className="h-7 w-auto min-w-[9.5rem] border-slate-200 bg-slate-50 px-2 text-xs text-slate-600 shadow-none"
+        />
+        {localDate || remoteDate ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-slate-400 hover:text-slate-700"
+            title="Limpar data"
+            aria-label="Limpar data de início da obra"
+            onClick={clearDate}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        ) : (
+          <span className="text-xs text-slate-400">-</span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function CardDetailSheet({
@@ -295,6 +367,27 @@ export function CardDetailSheet({
     );
   }
 
+  function submitComment() {
+    const author = authorName.trim();
+    const content = commentDraft.trim();
+    if (!author || !content || comments.add.isPending) return;
+
+    comments.add.mutate(
+      { author, content },
+      {
+        onSuccess: () => {
+          setCommentDraft("");
+        },
+      }
+    );
+  }
+
+  function handleCommentKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    e.preventDefault();
+    submitComment();
+  }
+
   if (!card) return null;
 
   const columnName =
@@ -406,46 +499,13 @@ export function CardDetailSheet({
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <label
-                    htmlFor={`start-date-${card.id}`}
-                    className="text-xs text-slate-500"
-                  >
-                    Definir data de início da obra
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      id={`start-date-${card.id}`}
-                      type="date"
-                      value={card.start_date?.slice(0, 10) ?? ""}
-                      onChange={(e) => {
-                        const value = e.target.value.trim();
-                        editCard.mutate({
-                          id: card.id,
-                          start_date: value || null,
-                        });
-                      }}
-                      className="h-7 w-auto min-w-[9.5rem] border-slate-200 bg-slate-50 px-2 text-xs text-slate-600 shadow-none"
-                    />
-                    {card.start_date ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-slate-400 hover:text-slate-700"
-                        title="Limpar data"
-                        aria-label="Limpar data de início da obra"
-                        onClick={() =>
-                          editCard.mutate({ id: card.id, start_date: null })
-                        }
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-slate-400">-</span>
-                    )}
-                  </div>
-                </div>
+                <StartDateField
+                  cardId={card.id}
+                  startDate={card.start_date}
+                  onSave={(value) =>
+                    editCard.mutate({ id: card.id, start_date: value })
+                  }
+                />
               </div>
             </div>
 
@@ -738,6 +798,7 @@ export function CardDetailSheet({
                     <Textarea
                       value={commentDraft}
                       onChange={(e) => setCommentDraft(e.target.value)}
+                      onKeyDown={handleCommentKeyDown}
                       placeholder="Escrever um comentário..."
                       className="min-h-[72px] resize-none border-slate-200 bg-white text-sm shadow-sm"
                     />
@@ -748,19 +809,7 @@ export function CardDetailSheet({
                         !commentDraft.trim() ||
                         comments.add.isPending
                       }
-                      onClick={() =>
-                        comments.add.mutate(
-                          {
-                            author: authorName.trim(),
-                            content: commentDraft.trim(),
-                          },
-                          {
-                            onSuccess: () => {
-                              setCommentDraft("");
-                            },
-                          }
-                        )
-                      }
+                      onClick={submitComment}
                     >
                       Salvar
                     </Button>
